@@ -1,0 +1,11 @@
+{
+  "name": "Nokael Confirmation Portal",
+  "description": "UAE courier chain-of-custody tracking with token-based confirmation.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "real-time data",
+    "geolocation"
+  ]
+}

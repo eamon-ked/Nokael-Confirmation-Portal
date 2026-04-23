@@ -1,0 +1,58 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --color-nokael-bg: #f2f4f7;
+  --color-nokael-primary: #0f172a;
+  --color-nokael-accent: #0369A1;
+  --color-nokael-accent-light: #E0F2FE;
+  --color-nokael-success: #10b981;
+  --color-nokael-border: #e2e8f0;
+  --color-nokael-text-main: #1e293b;
+  --color-nokael-text-muted: #64748b;
+}
+
+@layer base {
+  html, body, #root {
+    @apply h-full overflow-x-hidden;
+  }
+
+  body {
+    @apply bg-nokael-bg text-nokael-text-main font-sans antialiased;
+  }
+
+  /* Universal scrollbar hide - Forced */
+  html, body, *, *::before, *::after {
+    -ms-overflow-style: none !important; /* IE and Edge */
+    scrollbar-width: none !important; /* Firefox */
+  }
+
+  html::-webkit-scrollbar, 
+  body::-webkit-scrollbar, 
+  *::-webkit-scrollbar {
+    display: none !important; /* Chrome, Safari, Opera */
+    width: 0 !important;
+    height: 0 !important;
+  }
+}
+
+.nokael-button {
+  @apply w-full min-h-[56px] bg-nokael-primary text-white font-semibold text-base rounded-xl transition-all duration-200 active:scale-[0.98] disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center justify-center px-6 shadow-sm;
+}
+
+.nokael-card {
+  @apply bg-white border border-nokael-border rounded-2xl p-6 shadow-sm;
+}
+
+.step-pill {
+  @apply bg-nokael-accent-light text-nokael-accent px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider inline-block;
+}
+
+.info-label {
+  @apply text-[11px] uppercase text-nokael-text-muted tracking-[0.05em] font-bold mb-1;
+}
+
+.info-value {
+  @apply text-sm font-medium text-nokael-text-main;
+}

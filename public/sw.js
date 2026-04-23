@@ -69,7 +69,20 @@ self.addEventListener('fetch', (event) => {
 
   // Skip Supabase API calls (always try network)
   if (url.hostname.includes('supabase')) {
-    event.respondWith(fetch(request));
+    event.respondWith(
+      fetch(request).catch((err) => {
+        console.log('[SW] Supabase request failed (offline):', url.pathname);
+        // Return a proper error response instead of letting it fail silently
+        return new Response(
+          JSON.stringify({ error: 'offline', message: 'No internet connection' }),
+          { 
+            status: 503, 
+            statusText: 'Service Unavailable',
+            headers: { 'Content-Type': 'application/json' }
+          }
+        );
+      })
+    );
     return;
   }
 
@@ -87,7 +100,8 @@ self.addEventListener('fetch', (event) => {
           }
           return response;
         })
-        .catch(() => {
+        .catch((err) => {
+          console.log('[SW] Network failed, serving from cache:', request.url);
           // Network failed - try cache
           return caches.match(request).then((cached) => {
             if (cached) {
@@ -95,7 +109,16 @@ self.addEventListener('fetch', (event) => {
               return cached;
             }
             // Return offline page if available
-            return caches.match('/index.html');
+            return caches.match('/index.html').then((indexPage) => {
+              if (indexPage) {
+                return indexPage;
+              }
+              // Last resort - return error page
+              return new Response(
+                '<html><body><h1>Offline</h1><p>No internet connection and page not cached.</p></body></html>',
+                { headers: { 'Content-Type': 'text/html' } }
+              );
+            });
           });
         })
     );
@@ -113,7 +136,9 @@ self.addEventListener('fetch', (event) => {
               cache.put(request, response);
             });
           }
-        }).catch(() => {});
+        }).catch(() => {
+          // Ignore background update errors
+        });
         return cached;
       }
 
@@ -133,6 +158,10 @@ self.addEventListener('fetch', (event) => {
           });
         }
         return response;
+      }).catch((err) => {
+        console.log('[SW] Asset fetch failed:', request.url);
+        // Return empty response for failed assets
+        return new Response('', { status: 404, statusText: 'Not Found' });
       });
     })
   );

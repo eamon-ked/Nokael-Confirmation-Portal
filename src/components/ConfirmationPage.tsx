@@ -58,24 +58,36 @@ export default function ConfirmationPage() {
     // Setup connectivity listeners
     const cleanup = setupConnectivityListeners(
       () => {
+        console.log('[Connectivity] Back online');
         setOnline(true);
         syncPendingConfirmations().then(() => fetchJob());
       },
-      () => setOnline(false)
+      () => {
+        console.log('[Connectivity] Gone offline');
+        setOnline(false);
+      }
     );
 
     // Start auto-sync
     startAutoSync();
 
-    const channel = supabase
-      .channel('job-updates')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'jobs' }, () => {
-        fetchJob();
-      })
-      .subscribe();
+    // Setup realtime subscription only if online
+    let channel: any = null;
+    if (isOnline()) {
+      channel = supabase
+        .channel('job-updates')
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'jobs' }, () => {
+          if (isOnline()) {
+            fetchJob();
+          }
+        })
+        .subscribe();
+    }
 
     return () => { 
-      channel.unsubscribe(); 
+      if (channel) {
+        channel.unsubscribe().catch(() => {});
+      }
       cleanup();
       stopAutoSync();
     };
@@ -88,29 +100,33 @@ export default function ConfirmationPage() {
       
       const config = STEP_CONFIG[step];
 
-      // Try online fetch first
-      if (isOnline()) {
-        const { data, error: supabaseError } = await supabase
-          .from('jobs')
-          .select(`
-            job_ref, pickup_emirate, pickup_location, delivery_emirate, delivery_location, 
-            item_type, status, sender_name, recipient_name,
-            client_pickup_at, driver_pickup_at, driver_delivery_at, client_delivery_at,
-            ${config.my_otp_field}, otp_sender, otp_driver_pickup, otp_driver_delivery, otp_recipient
-          `)
-          .eq(config.token_field, token)
-          .single();
+      // Check if we're truly online (not just navigator.onLine)
+      const actuallyOnline = isOnline();
 
-        if (supabaseError || !data) {
-          // Try cached data as fallback
-          const cached = await getCachedJob(token!);
-          if (cached) {
-            setJob(cached.job_data as Job);
-            setPendingSync(true);
-          } else {
-            setError('This link is not valid or has expired.');
+      if (actuallyOnline) {
+        // Try online fetch with timeout
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+
+          const { data, error: supabaseError } = await supabase
+            .from('jobs')
+            .select(`
+              job_ref, pickup_emirate, pickup_location, delivery_emirate, delivery_location, 
+              item_type, status, sender_name, recipient_name,
+              client_pickup_at, driver_pickup_at, driver_delivery_at, client_delivery_at,
+              ${config.my_otp_field}, otp_sender, otp_driver_pickup, otp_driver_delivery, otp_recipient
+            `)
+            .eq(config.token_field, token)
+            .abortSignal(controller.signal)
+            .single();
+
+          clearTimeout(timeoutId);
+
+          if (supabaseError || !data) {
+            throw new Error('Failed to fetch job data');
           }
-        } else {
+
           setJob(data as Job);
           
           // Cache job data for offline use
@@ -122,20 +138,43 @@ export default function ConfirmationPage() {
           
           // Also cache the page itself for offline loading
           cacheCurrentPage().catch(err => console.warn('Page caching failed:', err));
+          
+        } catch (fetchError) {
+          console.warn('Online fetch failed, falling back to cache:', fetchError);
+          // Network error - fall back to cache
+          const cached = await getCachedJob(token!);
+          if (cached) {
+            setJob(cached.job_data as Job);
+            setOnline(false); // Update online status
+          } else {
+            setError('Unable to load job data. Please check your connection and try again.');
+          }
         }
       } else {
-        // Offline - use cached data
+        // Offline - use cached data only
+        console.log('[Offline Mode] Loading from cache');
         const cached = await getCachedJob(token!);
         if (cached) {
           setJob(cached.job_data as Job);
-          setPendingSync(true);
         } else {
-          setError('No internet connection and no cached data available.');
+          setError('No internet connection. Please connect to load this page for the first time.');
         }
       }
     } catch (err) {
-      console.error(err);
-      setError('Something went wrong. Please try again or contact Nokael dispatch.');
+      console.error('fetchJob error:', err);
+      
+      // Last resort - try cache
+      try {
+        const cached = await getCachedJob(token!);
+        if (cached) {
+          setJob(cached.job_data as Job);
+          setOnline(false);
+        } else {
+          setError('Unable to load job data. Please try again.');
+        }
+      } catch (cacheErr) {
+        setError('Something went wrong. Please try again or contact Nokael dispatch.');
+      }
     } finally {
       setLoading(false);
     }
@@ -173,33 +212,46 @@ export default function ConfirmationPage() {
       const lat = position?.coords.latitude ?? null;
       const lng = position?.coords.longitude ?? null;
 
-      if (isOnline()) {
+      if (online) {
         // Online - verify with server
-        const { data, error: rpcError } = await supabase.rpc('confirm_job_step', {
-          p_token: token,
-          p_step: config.rpc_step,
-          p_otp: partnerOtp,
-          p_lat: lat,
-          p_lng: lng
-        });
+        try {
+          const { data, error: rpcError } = await supabase.rpc('confirm_job_step', {
+            p_token: token,
+            p_step: config.rpc_step,
+            p_otp: partnerOtp,
+            p_lat: lat,
+            p_lng: lng
+          });
 
-        if (rpcError) {
-          throw rpcError;
-        }
-
-        if (data?.error) {
-          if (data.error === 'invalid_otp') {
-            setError(`Incorrect code. ${data.attempts_left} attempts remaining.`);
-            setAttemptsLeft(data.attempts_left);
-            setPartnerOtp('');
-          } else if (data.error === 'max_attempts_reached') {
-            setIsLocked(true);
-            setError('Too many incorrect attempts. Please contact Nokael dispatch.');
-          } else {
-            setError(data.error);
+          if (rpcError) {
+            throw rpcError;
           }
-        } else {
-          await fetchJob();
+
+          if (data?.error) {
+            if (data.error === 'invalid_otp') {
+              setError(`Incorrect code. ${data.attempts_left} attempts remaining.`);
+              setAttemptsLeft(data.attempts_left);
+              setPartnerOtp('');
+            } else if (data.error === 'max_attempts_reached') {
+              setIsLocked(true);
+              setError('Too many incorrect attempts. Please contact Nokael dispatch.');
+            } else {
+              setError(data.error);
+            }
+          } else {
+            await fetchJob();
+          }
+        } catch (networkError) {
+          console.error('Network error during confirmation:', networkError);
+          // Network failed - fall back to offline mode
+          setOnline(false);
+          setError('Connection lost. Switching to offline mode...');
+          setTimeout(() => {
+            setError('');
+            // Retry as offline
+            handleConfirm();
+          }, 1000);
+          return;
         }
       } else {
         // Offline - verify locally and queue for sync

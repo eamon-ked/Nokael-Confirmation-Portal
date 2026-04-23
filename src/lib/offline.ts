@@ -22,6 +22,7 @@ export interface PendingConfirmation {
   lng: number | null;
   timestamp: number;
   synced: boolean;
+  job_ref?: string; // To match confirmations across different tokens
 }
 
 const DB_NAME = 'nokael_offline';
@@ -118,7 +119,8 @@ export async function queueConfirmation(
   step: string,
   otp: string,
   lat: number | null,
-  lng: number | null
+  lng: number | null,
+  job_ref?: string
 ): Promise<string> {
   const db = await openDB();
   const tx = db.transaction(CONFIRMATIONS_STORE, 'readwrite');
@@ -133,6 +135,7 @@ export async function queueConfirmation(
     lng,
     timestamp: Date.now(),
     synced: false,
+    job_ref,
   };
 
   await store.put(confirmation);

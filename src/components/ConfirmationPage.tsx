@@ -11,7 +11,7 @@ import {
   verifyOtpOffline, 
   queueConfirmation, 
   isOnline,
-  setupConnectivityListeners 
+  setupConnectivityListeners
 } from '@/src/lib/offline';
 import { syncPendingConfirmations, startAutoSync, stopAutoSync } from '@/src/lib/sync';
 import { cacheCurrentPage } from '@/src/lib/serviceWorker';
@@ -266,7 +266,7 @@ export default function ConfirmationPage() {
           }
         } else {
           // Valid OTP - queue for sync
-          await queueConfirmation(token!, config.rpc_step, partnerOtp, lat, lng);
+          await queueConfirmation(token!, config.rpc_step, partnerOtp, lat, lng, job?.job_ref);
           setOfflineVerified(true);
           setPendingSync(true);
           setPartnerOtp('');
@@ -336,8 +336,15 @@ export default function ConfirmationPage() {
   else if (isHandoverComplete) state = 'confirmed';
   else if (isConfirmed && !isPartnerConfirmed) state = 'waiting_partner';
   else {
-    if (statusRank[job.status] < statusRank[config.prerequisite_status]) state = 'not_yet';
-    else state = 'ready';
+    // When offline, allow progression regardless of prerequisite (server will validate on sync)
+    // When online, enforce prerequisite status
+    const prerequisiteMet = !online || statusRank[job.status] >= statusRank[config.prerequisite_status];
+    
+    if (!prerequisiteMet) {
+      state = 'not_yet';
+    } else {
+      state = 'ready';
+    }
   }
 
   const myOtp = job ? (job[config.my_otp_field] as string) : '';
@@ -459,7 +466,9 @@ export default function ConfirmationPage() {
             <div className="space-y-4">
               <div className="bg-slate-100/50 border border-nokael-border rounded-2xl p-6 flex flex-col items-center gap-3 text-center">
                 <Clock className="w-7 h-7 text-slate-300" />
-                <p className="text-sm text-nokael-text-muted leading-relaxed font-medium px-4">{config.not_yet_message}</p>
+                <p className="text-sm text-nokael-text-muted leading-relaxed font-medium px-4">
+                  {config.not_yet_message}
+                </p>
               </div>
               {/* Show own OTP even in not_yet so partner can pre-share their code */}
               <div className="nokael-card !p-5 space-y-3">
@@ -484,6 +493,14 @@ export default function ConfirmationPage() {
             </div>
           ) : (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              {!online && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center">
+                  <p className="text-xs text-amber-700 font-bold">
+                    ⚠️ Offline Mode: You can verify now. Server will validate sequence when syncing.
+                  </p>
+                </div>
+              )}
+              
               {/* OTP Input Section */}
               <div className="space-y-4">
                 <div className="info-label text-center">

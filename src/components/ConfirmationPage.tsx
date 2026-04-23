@@ -3,8 +3,18 @@ import { useParams } from 'react-router-dom';
 import { supabase } from '@/src/lib/supabase';
 import { formatUAETime, isWhatsAppBrowser } from '@/src/lib/utils';
 import { Job, Step, STEP_CONFIG, VALID_STEPS } from '@/src/types';
-import { AlertCircle, CheckCircle2, Clock, MessageSquare, Loader2, QrCode, Key, Users, History, Lock } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock, MessageSquare, Loader2, QrCode, Key, Users, History, Lock, Eye, EyeOff, WifiOff, Wifi, CloudOff } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
+import { 
+  cacheJobData, 
+  getCachedJob, 
+  verifyOtpOffline, 
+  queueConfirmation, 
+  isOnline,
+  setupConnectivityListeners 
+} from '@/src/lib/offline';
+import { syncPendingConfirmations, startAutoSync, stopAutoSync } from '@/src/lib/sync';
+import { cacheCurrentPage } from '@/src/lib/serviceWorker';
 
 // Lazy load Framer Motion
 const MotionDiv = lazy(() => import('motion/react').then(mod => ({ default: mod.motion.div })));
@@ -21,6 +31,19 @@ export default function ConfirmationPage() {
   const [showQr, setShowQr] = useState(false);
   const [attemptsLeft, setAttemptsLeft] = useState<number | null>(null);
   const [isLocked, setIsLocked] = useState(false);
+  const [showMyOtp, setShowMyOtp] = useState(false);
+  const [otpRevealTimer, setOtpRevealTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
+  const [online, setOnline] = useState(isOnline());
+  const [pendingSync, setPendingSync] = useState(false);
+  const [offlineVerified, setOfflineVerified] = useState(false);
+
+  // Auto-hide OTP after 10 seconds for security
+  function handleRevealOtp() {
+    if (otpRevealTimer) clearTimeout(otpRevealTimer);
+    setShowMyOtp(true);
+    const timer = setTimeout(() => setShowMyOtp(false), 10000);
+    setOtpRevealTimer(timer);
+  }
 
   const isValidStep = VALID_STEPS.includes(step);
   const stepIndex = VALID_STEPS.indexOf(step) + 1;
@@ -32,6 +55,18 @@ export default function ConfirmationPage() {
     }
     fetchJob();
 
+    // Setup connectivity listeners
+    const cleanup = setupConnectivityListeners(
+      () => {
+        setOnline(true);
+        syncPendingConfirmations().then(() => fetchJob());
+      },
+      () => setOnline(false)
+    );
+
+    // Start auto-sync
+    startAutoSync();
+
     const channel = supabase
       .channel('job-updates')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'jobs' }, () => {
@@ -39,7 +74,11 @@ export default function ConfirmationPage() {
       })
       .subscribe();
 
-    return () => { channel.unsubscribe(); };
+    return () => { 
+      channel.unsubscribe(); 
+      cleanup();
+      stopAutoSync();
+    };
   }, [token, step]);
 
   async function fetchJob() {
@@ -48,21 +87,51 @@ export default function ConfirmationPage() {
       setError(null);
       
       const config = STEP_CONFIG[step];
-      const { data, error: supabaseError } = await supabase
-        .from('jobs')
-        .select(`
-          job_ref, pickup_emirate, pickup_location, delivery_emirate, delivery_location, 
-          item_type, status, sender_name, recipient_name,
-          client_pickup_at, driver_pickup_at, driver_delivery_at, client_delivery_at,
-          ${config.my_otp_field}
-        `)
-        .eq(config.token_field, token)
-        .single();
 
-      if (supabaseError || !data) {
-        setError('This link is not valid or has expired.');
+      // Try online fetch first
+      if (isOnline()) {
+        const { data, error: supabaseError } = await supabase
+          .from('jobs')
+          .select(`
+            job_ref, pickup_emirate, pickup_location, delivery_emirate, delivery_location, 
+            item_type, status, sender_name, recipient_name,
+            client_pickup_at, driver_pickup_at, driver_delivery_at, client_delivery_at,
+            ${config.my_otp_field}, otp_sender, otp_driver_pickup, otp_driver_delivery, otp_recipient
+          `)
+          .eq(config.token_field, token)
+          .single();
+
+        if (supabaseError || !data) {
+          // Try cached data as fallback
+          const cached = await getCachedJob(token!);
+          if (cached) {
+            setJob(cached.job_data as Job);
+            setPendingSync(true);
+          } else {
+            setError('This link is not valid or has expired.');
+          }
+        } else {
+          setJob(data as Job);
+          
+          // Cache job data for offline use
+          const partnerOtpField = getPartnerOtpField(step);
+          const partnerOtp = data[partnerOtpField] as string;
+          const myOtp = data[config.my_otp_field] as string;
+          
+          await cacheJobData(token!, step, data, partnerOtp, myOtp);
+          
+          // Also cache the page itself for offline loading
+          cacheCurrentPage().catch(err => console.warn('Page caching failed:', err));
+        }
       } else {
-        setJob(data as Job);
+        // Offline - use cached data
+        const cached = await getCachedJob(token!);
+        if (cached) {
+          setJob(cached.job_data as Job);
+          setPendingSync(true);
+        } else {
+          setError('No internet connection and no cached data available.');
+        }
       }
     } catch (err) {
       console.error(err);
@@ -70,6 +139,16 @@ export default function ConfirmationPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function getPartnerOtpField(step: Step): keyof Job {
+    const mapping: Record<Step, keyof Job> = {
+      'client-pickup': 'otp_driver_pickup',
+      'driver-pickup': 'otp_sender',
+      'driver-delivery': 'otp_recipient',
+      'client-delivery': 'otp_driver_delivery',
+    };
+    return mapping[step];
   }
 
   async function handleConfirm() {
@@ -91,31 +170,55 @@ export default function ConfirmationPage() {
         );
       });
 
-      const { data, error: rpcError } = await supabase.rpc('confirm_job_step', {
-        p_token: token,
-        p_step: config.rpc_step,
-        p_otp: partnerOtp,
-        p_lat: position?.coords.latitude ?? null,
-        p_lng: position?.coords.longitude ?? null
-      });
+      const lat = position?.coords.latitude ?? null;
+      const lng = position?.coords.longitude ?? null;
 
-      if (rpcError) {
-        throw rpcError;
-      }
+      if (isOnline()) {
+        // Online - verify with server
+        const { data, error: rpcError } = await supabase.rpc('confirm_job_step', {
+          p_token: token,
+          p_step: config.rpc_step,
+          p_otp: partnerOtp,
+          p_lat: lat,
+          p_lng: lng
+        });
 
-      if (data?.error) {
-        if (data.error === 'invalid_otp') {
-          setError(`Incorrect code. ${data.attempts_left} attempts remaining.`);
-          setAttemptsLeft(data.attempts_left);
-          setPartnerOtp('');
-        } else if (data.error === 'max_attempts_reached') {
-          setIsLocked(true);
-          setError('Too many incorrect attempts. Please contact Nokael dispatch.');
+        if (rpcError) {
+          throw rpcError;
+        }
+
+        if (data?.error) {
+          if (data.error === 'invalid_otp') {
+            setError(`Incorrect code. ${data.attempts_left} attempts remaining.`);
+            setAttemptsLeft(data.attempts_left);
+            setPartnerOtp('');
+          } else if (data.error === 'max_attempts_reached') {
+            setIsLocked(true);
+            setError('Too many incorrect attempts. Please contact Nokael dispatch.');
+          } else {
+            setError(data.error);
+          }
         } else {
-          setError(data.error);
+          await fetchJob();
         }
       } else {
-        await fetchJob();
+        // Offline - verify locally and queue for sync
+        const verification = await verifyOtpOffline(token!, partnerOtp);
+
+        if (!verification.valid) {
+          if (verification.error === 'no_cached_data') {
+            setError('Cannot verify offline - no cached data. Connect to internet first.');
+          } else {
+            setError('Incorrect code. Please try again.');
+            setPartnerOtp('');
+          }
+        } else {
+          // Valid OTP - queue for sync
+          await queueConfirmation(token!, config.rpc_step, partnerOtp, lat, lng);
+          setOfflineVerified(true);
+          setPendingSync(true);
+          setPartnerOtp('');
+        }
       }
     } catch (err: any) {
       console.error(err);
@@ -194,15 +297,48 @@ export default function ConfirmationPage() {
           <img src="/nokael-logo.svg" alt="Nokael" className="h-6" onError={(e) => (e.currentTarget.style.display = 'none')} />
           <span className="text-lg font-[850] tracking-tighter text-nokael-primary uppercase italic">NOKAEL</span>
         </div>
-        {!isConfirmed && (
-          <div className="flex items-center gap-1.5 px-3 py-1 bg-nokael-success/10 rounded-full">
-             <div className="w-1.5 h-1.5 bg-nokael-success rounded-full animate-pulse" />
-             <span className="text-[9px] font-black text-nokael-success tracking-widest uppercase">Live Session</span>
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          {!online && (
+            <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-500/10 rounded-full">
+              <WifiOff className="w-3 h-3 text-amber-600" />
+              <span className="text-[9px] font-black text-amber-600 tracking-widest uppercase">Offline</span>
+            </div>
+          )}
+          {pendingSync && online && (
+            <div className="flex items-center gap-1.5 px-3 py-1 bg-blue-500/10 rounded-full">
+              <CloudOff className="w-3 h-3 text-blue-600 animate-pulse" />
+              <span className="text-[9px] font-black text-blue-600 tracking-widest uppercase">Syncing...</span>
+            </div>
+          )}
+          {!isConfirmed && online && !pendingSync && (
+            <div className="flex items-center gap-1.5 px-3 py-1 bg-nokael-success/10 rounded-full">
+               <div className="w-1.5 h-1.5 bg-nokael-success rounded-full animate-pulse" />
+               <span className="text-[9px] font-black text-nokael-success tracking-widest uppercase">Live Session</span>
+            </div>
+          )}
+        </div>
       </header>
 
-      {state === 'confirmed' ? (
+      {offlineVerified && !online ? (
+        <div className="nokael-card text-center space-y-6 !p-8 border-amber-500/20 bg-amber-500/[0.02]">
+          <div className="w-16 h-16 bg-amber-500/10 rounded-full flex items-center justify-center mx-auto">
+            <CloudOff className="w-8 h-8 text-amber-600" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-2xl font-bold text-nokael-primary">Verified Offline</h2>
+            <p className="text-nokael-text-muted text-sm px-4">
+              OTP verified successfully. This confirmation will sync to the server when you reconnect to the internet.
+            </p>
+          </div>
+          <div className="pt-4 border-t border-nokael-border">
+            <div className="info-label">Status</div>
+            <div className="text-xs font-bold text-amber-600 flex items-center justify-center gap-2">
+              <WifiOff className="w-4 h-4" />
+              Pending Sync
+            </div>
+          </div>
+        </div>
+      ) : state === 'confirmed' ? (
         <Suspense fallback={null}>
           <MotionDiv initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="nokael-card text-center space-y-6 !p-8 border-nokael-success/20 bg-nokael-success/[0.02]">
             <div className="w-16 h-16 bg-nokael-success/10 rounded-full flex items-center justify-center mx-auto"><CheckCircle2 className="w-8 h-8 text-nokael-success" /></div>
@@ -222,7 +358,7 @@ export default function ConfirmationPage() {
             <History className="w-12 h-12 text-nokael-accent mx-auto animate-[spin_3s_linear_infinite]" />
             <div className="space-y-1">
               <h3 className="text-xl font-bold text-nokael-primary tracking-tight">Syncing Handover...</h3>
-              <p className="text-sm text-nokael-text-muted px-6">You've confirmed. Waiting for the <span className="font-bold text-nokael-accent uppercase">{config.partner_role}</span> to enter your secure code.</p>
+              <p className="text-sm text-nokael-text-muted px-6">You've confirmed. Waiting for the <span className="font-bold text-nokael-accent uppercase">{config.partner_role}</span> to enter your code on their device.</p>
             </div>
           </div>
 
@@ -230,10 +366,22 @@ export default function ConfirmationPage() {
              <div className="nokael-card !bg-white space-y-4">
                 <div className="text-center space-y-1">
                    <p className="info-label">Your Secure Code</p>
-                   <div className="text-4xl font-black font-mono tracking-[0.2em] text-nokael-primary py-4 bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                     {myOtp}
-                   </div>
-                   <p className="text-[10px] text-nokael-text-muted font-bold pt-2">Read this aloud to the {config.partner_role}</p>
+                   <button
+                     onClick={handleRevealOtp}
+                     className="w-full relative flex items-center justify-center py-5 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 transition-all active:scale-[0.98]"
+                   >
+                     {showMyOtp ? (
+                       <span className="text-4xl font-black font-mono tracking-[0.2em] text-nokael-primary select-all">{myOtp}</span>
+                     ) : (
+                       <div className="flex items-center gap-2 text-nokael-text-muted">
+                         <Eye className="w-4 h-4" />
+                         <span className="text-[11px] font-black uppercase tracking-widest">Tap to reveal</span>
+                       </div>
+                     )}
+                   </button>
+                   <p className="text-[10px] text-nokael-text-muted font-bold pt-2">
+                     {showMyOtp ? '⚠ Hides in 10s — share verbally only' : 'Read this aloud to the ' + config.partner_role + ' only'}
+                   </p>
                 </div>
              </div>
 
@@ -256,15 +404,40 @@ export default function ConfirmationPage() {
           </div>
 
           {state === 'not_yet' ? (
-            <div className="bg-slate-100/50 border border-nokael-border rounded-2xl p-8 flex flex-col items-center gap-4 text-center">
-              <Clock className="w-8 h-8 text-slate-300" />
-              <p className="text-sm text-nokael-text-muted leading-relaxed font-medium px-4">{config.not_yet_message}</p>
+            <div className="space-y-4">
+              <div className="bg-slate-100/50 border border-nokael-border rounded-2xl p-6 flex flex-col items-center gap-3 text-center">
+                <Clock className="w-7 h-7 text-slate-300" />
+                <p className="text-sm text-nokael-text-muted leading-relaxed font-medium px-4">{config.not_yet_message}</p>
+              </div>
+              {/* Show own OTP even in not_yet so partner can pre-share their code */}
+              <div className="nokael-card !p-5 space-y-3">
+                <p className="info-label !mb-0">Your Code — Share with {config.partner_role}</p>
+                <button
+                  onClick={handleRevealOtp}
+                  className="w-full flex items-center justify-center h-12 rounded-xl border-2 border-dashed border-nokael-border bg-slate-50 transition-all active:scale-[0.98]"
+                >
+                  {showMyOtp ? (
+                    <span className="text-2xl font-black font-mono tracking-[0.3em] text-nokael-primary select-all">{myOtp}</span>
+                  ) : (
+                    <div className="flex items-center gap-2 text-nokael-text-muted">
+                      <Eye className="w-4 h-4" />
+                      <span className="text-[11px] font-black uppercase tracking-widest">Tap to reveal</span>
+                    </div>
+                  )}
+                </button>
+                <p className="text-[10px] text-nokael-text-muted font-bold">
+                  {showMyOtp ? '⚠ Hides in 10s — share verbally only' : 'The ' + config.partner_role + ' will enter this on their device'}
+                </p>
+              </div>
             </div>
           ) : (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
               {/* OTP Input Section */}
               <div className="space-y-4">
-                <div className="info-label text-center">Enter {config.partner_role}'s Code</div>
+                <div className="info-label text-center">
+                  Enter {config.partner_role}'s Code
+                  {!online && <span className="ml-2 text-amber-600">(Offline Mode)</span>}
+                </div>
                 <div className="relative">
                   <input 
                     type="text" 
@@ -299,16 +472,43 @@ export default function ConfirmationPage() {
                   onClick={handleConfirm}
                   disabled={confirming || partnerOtp.length !== 6}
                 >
-                  {confirming ? <Loader2 className="w-6 h-6 animate-spin" /> : config.button_text}
+                  {confirming ? (
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      {!online && <WifiOff className="w-5 h-5" />}
+                      {config.button_text}
+                    </span>
+                  )}
                 </button>
+
+                {!online && (
+                  <div className="text-center text-xs text-amber-600 font-bold bg-amber-50 p-3 rounded-lg border border-amber-200">
+                    ⚠️ Offline mode: Verification will sync when connection returns
+                  </div>
+                )}
 
                 <div className="nokael-card !p-5 !bg-nokael-accent/[0.03] border-nokael-accent/10 space-y-4">
                    <div className="flex items-center justify-between">
-                      <span className="info-label !mb-0">{config.role === 'sender' ? 'Your' : 'Driver'} Secure Code</span>
-                      <div className="px-2 py-0.5 bg-nokael-accent/10 rounded text-[9px] font-black text-nokael-accent uppercase tracking-widest leading-none">Scannable</div>
+                      <span className="info-label !mb-0">Share Code with {config.partner_role}</span>
+                      <div className="px-2 py-0.5 bg-nokael-accent/10 rounded text-[9px] font-black text-nokael-accent uppercase tracking-widest leading-none">Private</div>
                    </div>
-                   <div className="text-3xl font-black font-mono tracking-[0.3em] text-nokael-primary">{myOtp}</div>
-                   <p className="text-[10px] text-nokael-text-muted font-bold">The partner will enter this on their device</p>
+                   <button
+                     onClick={handleRevealOtp}
+                     className="w-full relative flex items-center justify-center h-14 rounded-xl border-2 border-dashed border-nokael-border bg-slate-50 transition-all active:scale-[0.98]"
+                   >
+                     {showMyOtp ? (
+                       <span className="text-3xl font-black font-mono tracking-[0.3em] text-nokael-primary select-all">{myOtp}</span>
+                     ) : (
+                       <div className="flex items-center gap-2 text-nokael-text-muted">
+                         <Eye className="w-4 h-4" />
+                         <span className="text-[11px] font-black uppercase tracking-widest">Tap to reveal</span>
+                       </div>
+                     )}
+                   </button>
+                   <p className="text-[10px] text-nokael-text-muted font-bold">
+                     {showMyOtp ? '⚠ Code visible — hides automatically in 10s' : 'Read this aloud to the ' + config.partner_role + ' only'}
+                   </p>
                 </div>
               </div>
             </div>

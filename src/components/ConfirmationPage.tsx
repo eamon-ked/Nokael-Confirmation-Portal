@@ -147,7 +147,7 @@ export default function ConfirmationPage() {
         // Try online fetch with timeout
         try {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+          const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
           const { data, error: supabaseError } = await supabase
             .from('jobs')
@@ -156,7 +156,6 @@ export default function ConfirmationPage() {
               item_type, status, sender_name, recipient_name,
               client_pickup_at, driver_pickup_at, driver_delivery_at, client_delivery_at,
               pickup_lat, pickup_lng, delivery_lat, delivery_lng,
-              driver_lat, driver_lng,
               ${config.my_otp_field}, otp_sender, otp_driver_pickup, otp_driver_delivery, otp_recipient
             `)
             .eq(config.token_field, token)
@@ -165,7 +164,20 @@ export default function ConfirmationPage() {
 
           clearTimeout(timeoutId);
 
-          if (supabaseError || !data) {
+          if (supabaseError) {
+            console.error('[Supabase Error]', supabaseError);
+            if (supabaseError.code === 'PGRST116') {
+              setError('Security Error: Invalid or expired access link. Please check the link or contact dispatch.');
+              setLoading(false);
+              return;
+            }
+            if (supabaseError.message?.includes('failed to fetch') || supabaseError.message?.includes('NetworkError')) {
+              throw new Error('NETWORK_ERROR');
+            }
+            throw supabaseError;
+          }
+
+          if (!data) {
             throw new Error('Failed to fetch job data');
           }
 
@@ -181,15 +193,29 @@ export default function ConfirmationPage() {
           // Also cache the page itself for offline loading
           cacheCurrentPage().catch(err => console.warn('Page caching failed:', err));
           
-        } catch (fetchError) {
-          console.warn('Online fetch failed, falling back to cache:', fetchError);
-          // Network error - fall back to cache
+        } catch (fetchError: any) {
+          console.warn('Online fetch failed, checking cause:', fetchError);
+          
+          if (fetchError.name === 'AbortError' || fetchError.message === 'NETWORK_ERROR') {
+             setError('Connection Timeout: Signal too weak to reach the security server. Please refresh or move to an open area.');
+             setLoading(false);
+             return;
+          }
+
+          if (supabase.auth.getSession === undefined) {
+             setError('Configuration Error: Supabase URL or Key is missing. Check your AI Studio Secrets.');
+             setLoading(false);
+             return;
+          }
+
+          // Network error or other - fall back to cache
           const cached = await getCachedJob(token!);
           if (cached) {
             setJob(cached.job_data as Job);
             setOnline(false); // Update online status
+            setError(null);
           } else {
-            setError('Unable to load job data. Please check your connection and try again.');
+            setError(`Error: ${fetchError.message || 'Unable to connect to Nokael servers'}. Check your internet signal.`);
           }
         }
       } else {

@@ -106,6 +106,11 @@ export async function verifyOtpOffline(
     return { valid: false, error: 'no_cached_data' };
   }
 
+  // CRITICAL: Block self-verification offline
+  if (enteredOtp === cachedJob.my_otp) {
+    return { valid: false, error: 'self_verification_blocked' };
+  }
+
   if (enteredOtp !== cachedJob.partner_otp) {
     return { valid: false, error: 'invalid_otp' };
   }

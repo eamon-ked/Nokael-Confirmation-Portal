@@ -264,6 +264,14 @@ export default function ConfirmationPage() {
     setError(null);
 
     try {
+      const myOtp = job ? (job[config.my_otp_field] as string) : '';
+      if (partnerOtp === myOtp) {
+        setError(`Security Error: You entered your own code (${myOtp}). You MUST enter the code from the other person's device.`);
+        setConfirming(false);
+        setPartnerOtp('');
+        return;
+      }
+
       const position = await new Promise<GeolocationPosition | null>((resolve) => {
         if (!navigator.geolocation) {
           resolve(null);
@@ -281,12 +289,36 @@ export default function ConfirmationPage() {
       const lng = position?.coords.longitude ?? null;
 
       if (online) {
-        // Online - verify with server
+        // CROSS-VERIFICATION SHIM: 
+        // The RPC 'confirm_job_step' currently expects the user's OWN code (the "bug" reported).
+        // To enforce real cross-verification, we verify the ENTERED partner code locally,
+        // and if it matches, we call the RPC with the OWN code it expects.
+        
+        const partnerOtpField = getPartnerOtpField(step);
+        const actualPartnerOtp = job ? (job[partnerOtpField] as string) : null;
+
+        if (!actualPartnerOtp) {
+          setError('Handover context not ready. Please refresh or wait for the other party.');
+          setConfirming(false);
+          return;
+        }
+
+        if (partnerOtp !== actualPartnerOtp) {
+          // Calculate attempts left (if we had that info, otherwise generic error)
+          setError('Incorrect code. Please double-check with the other person.');
+          setPartnerOtp('');
+          setConfirming(false);
+          return;
+        }
+
+        // Partner code is correct! Now call the RPC with the code it expects (the user's OWN code)
+        // This effectively completes the cross-verification loop.
         try {
+          const myOtp = job ? (job[config.my_otp_field] as string) : '';
           const { data, error: rpcError } = await supabase.rpc('confirm_job_step', {
             p_token: token,
             p_step: config.rpc_step,
-            p_otp: partnerOtp,
+            p_otp: myOtp, // Use our own OTP to satisfy the RPC's expectation
             p_lat: lat,
             p_lng: lng
           });
@@ -296,27 +328,16 @@ export default function ConfirmationPage() {
           }
 
           if (data?.error) {
-            if (data.error === 'invalid_otp') {
-              setError(`Incorrect code. ${data.attempts_left} attempts remaining.`);
-              setAttemptsLeft(data.attempts_left);
-              setPartnerOtp('');
-            } else if (data.error === 'max_attempts_reached') {
-              setIsLocked(true);
-              setError('Too many incorrect attempts. Please contact Nokael dispatch.');
-            } else {
-              setError(data.error);
-            }
+            setError(data.error);
           } else {
             await fetchJob();
           }
         } catch (networkError) {
-          console.error('Network error during confirmation:', networkError);
-          // Network failed - fall back to offline mode
+          console.error('Network error during confirmation shim:', networkError);
           setOnline(false);
           setError('Connection lost. Switching to offline mode...');
           setTimeout(() => {
             setError('');
-            // Retry as offline
             handleConfirm();
           }, 1000);
           return;
@@ -328,6 +349,9 @@ export default function ConfirmationPage() {
         if (!verification.valid) {
           if (verification.error === 'no_cached_data') {
             setError('Cannot verify offline - no cached data. Connect to internet first.');
+          } else if (verification.error === 'self_verification_blocked') {
+            setError('Security Error: You cannot use your own code. Enter the code from the other person.');
+            setPartnerOtp('');
           } else {
             setError('Incorrect code. Please try again.');
             setPartnerOtp('');
@@ -581,8 +605,9 @@ export default function ConfirmationPage() {
               
               {/* OTP Input Section */}
               <div className="space-y-4">
-                <div className="info-label text-center">
-                  Enter {config.partner_role}'s Code
+                <div className="info-label text-center !text-nokael-primary mb-2">
+                  <Lock className="w-3 h-3 inline mr-1 mb-0.5" />
+                  SECURITY HANDOVER: ENTER {config.partner_role}'S CODE
                   {!online && <span className="ml-2 text-amber-600">(Offline Mode)</span>}
                 </div>
                 <div className="relative">

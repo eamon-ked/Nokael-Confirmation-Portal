@@ -20,6 +20,99 @@ import DriverMap from './DriverMap';
 // Lazy load Framer Motion
 const MotionDiv = lazy(() => import('motion/react').then(mod => ({ default: mod.motion.div })));
 
+function JobSummary({ job }: { job: Job }) {
+  return (
+    <Suspense fallback={<div className="min-h-[400px] flex items-center justify-center"><Loader2 className="animate-spin text-nokael-primary" /></div>}>
+      <MotionDiv 
+        initial={{ opacity: 0, y: 20 }} 
+        animate={{ opacity: 1, y: 0 }}
+        className="space-y-8"
+      >
+        <div className="nokael-card !p-8 border-nokael-success/20 bg-nokael-success/[0.02] text-center space-y-4">
+          <div className="w-16 h-16 bg-nokael-success/10 rounded-full flex items-center justify-center mx-auto">
+            <CheckCircle2 className="w-8 h-8 text-nokael-success" />
+          </div>
+          <div className="space-y-1">
+            <h2 className="text-2xl font-black text-nokael-primary italic uppercase tracking-tight">Mission Accomplished</h2>
+            <p className="text-nokael-text-muted text-sm px-4">Your delivery has been successfully verified and completed.</p>
+          </div>
+        </div>
+
+        <div className="nokael-card !p-0 overflow-hidden border-nokael-border">
+          <div className="bg-slate-50 px-6 py-4 border-b border-nokael-border flex justify-between items-center">
+            <span className="text-[10px] font-black uppercase tracking-widest text-nokael-primary">Delivery Certificate</span>
+            <span className="text-xs font-bold text-nokael-text-main">{job.job_ref}</span>
+          </div>
+          
+          <div className="p-6 space-y-6">
+            <div className="grid grid-cols-2 gap-8">
+              <div className="space-y-1">
+                <p className="info-label">Sender</p>
+                <p className="text-sm font-bold text-nokael-text-main uppercase">{job.sender_name}</p>
+              </div>
+              <div className="space-y-1 text-right">
+                <p className="info-label">Recipient</p>
+                <p className="text-sm font-bold text-nokael-text-main uppercase">{job.recipient_name}</p>
+              </div>
+            </div>
+
+            <div className="relative pl-6 space-y-10">
+              <div className="absolute left-[5px] top-2 bottom-2 w-[1px] border-l border-dashed border-nokael-border" />
+              
+              {/* Pickup */}
+              <div className="relative">
+                <div className="absolute -left-[25px] top-1.5 w-2.5 h-2.5 rounded-full bg-nokael-primary ring-4 ring-white" />
+                <div className="space-y-1">
+                  <p className="info-label !mb-0">Collected From</p>
+                  <p className="text-[13px] font-bold text-nokael-text-main leading-snug">
+                    {job.pickup_location}, {job.pickup_emirate}
+                  </p>
+                  <div className="flex items-center gap-1.5 mt-1 text-[10px] font-medium text-nokael-text-muted">
+                    <Clock className="w-3 h-3" />
+                    <span>Verified: {formatUAETime(job.client_pickup_at)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Delivery */}
+              <div className="relative">
+                <div className="absolute -left-[25px] top-1.5 w-2.5 h-2.5 rounded-full bg-nokael-success ring-4 ring-white" />
+                <div className="space-y-1">
+                  <p className="info-label !mb-0">Delivered To</p>
+                  <p className="text-[13px] font-bold text-nokael-text-main leading-snug">
+                    {job.delivery_location}, {job.delivery_emirate}
+                  </p>
+                  <div className="flex items-center gap-1.5 mt-1 text-[10px] font-medium text-nokael-text-muted">
+                    <CheckCircle2 className="w-3 h-3 text-nokael-success" />
+                    <span>Completed: {formatUAETime(job.client_delivery_at)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <a 
+            href="https://nokael.com/book"
+            className="nokael-button h-16 text-lg font-black uppercase tracking-widest flex items-center justify-center gap-3 no-underline"
+          >
+            <QrCode className="w-6 h-6" />
+            Book Another Job
+          </a>
+          
+          <div className="bg-slate-50 rounded-xl p-5 border border-nokael-border text-center">
+            <p className="text-[10px] leading-relaxed text-nokael-text-muted font-bold uppercase tracking-wider">
+              <History className="w-3.5 h-3.5 inline mr-1.5 mb-0.5 text-nokael-primary" />
+              Nokael stores this delivery metadata for 6 months for your records & chain-of-custody verification.
+            </p>
+          </div>
+        </div>
+      </MotionDiv>
+    </Suspense>
+  );
+}
+
 export default function ConfirmationPage() {
   const { token, step: stepParam } = useParams<{ token: string; step: string }>();
   const step = stepParam as Step;
@@ -499,6 +592,8 @@ export default function ConfirmationPage() {
             </div>
           </div>
         </div>
+      ) : job?.status === 'completed' ? (
+        <JobSummary job={job} />
       ) : state === 'confirmed' ? (
         <Suspense fallback={null}>
           <MotionDiv initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="nokael-card text-center space-y-6 !p-8 border-nokael-success/20 bg-nokael-success/[0.02]">
@@ -688,69 +783,69 @@ export default function ConfirmationPage() {
         </div>
       )}
 
-      {job && job.status !== 'completed' && (job.driver_lat || job.driver_lng) && (
-        <DriverMap job={job} />
-      )}
+      {job && job.status !== 'completed' && (
+        <>
+          {(job.driver_lat || job.driver_lng) && <DriverMap job={job} />}
 
-      {job && (
-        <section className="nokael-card !p-5 border-nokael-border bg-slate-50/50 space-y-4 animate-in fade-in duration-700">
-           <div className="flex items-center justify-between mb-1">
-             <div className="flex items-center gap-2">
-               <History className="w-4 h-4 text-nokael-primary" />
-               <h3 className="text-[10px] font-black uppercase tracking-[0.1em] text-nokael-primary">Live Job Tracking</h3>
+          <section className="nokael-card !p-5 border-nokael-border bg-slate-50/50 space-y-4 animate-in fade-in duration-700">
+             <div className="flex items-center justify-between mb-1">
+               <div className="flex items-center gap-2">
+                 <History className="w-4 h-4 text-nokael-primary" />
+                 <h3 className="text-[10px] font-black uppercase tracking-[0.1em] text-nokael-primary">Live Job Tracking</h3>
+               </div>
+               <div className="flex items-center gap-1">
+                  <div className={`w-1.5 h-1.5 rounded-full ${job.status === 'completed' ? 'bg-nokael-success' : 'bg-nokael-accent animate-pulse'}`} />
+                  <span className="text-[9px] font-black uppercase tracking-widest text-nokael-text-main">{getStatusLabel(job.status)}</span>
+               </div>
              </div>
-             <div className="flex items-center gap-1">
-                <div className={`w-1.5 h-1.5 rounded-full ${job.status === 'completed' ? 'bg-nokael-success' : 'bg-nokael-accent animate-pulse'}`} />
-                <span className="text-[9px] font-black uppercase tracking-widest text-nokael-text-main">{getStatusLabel(job.status)}</span>
-             </div>
-           </div>
-           
-           <div className="grid grid-cols-2 gap-x-6 gap-y-4 pt-2">
-              <div className="space-y-1">
-                <p className="info-label !mb-0 !text-[9px]">Pickup Time</p>
-                <div className="flex items-center gap-1.5">
-                  <Clock className="w-3 h-3 text-nokael-text-muted" />
-                  <p className="text-[11px] font-bold text-nokael-text-main whitespace-nowrap">
-                    {job.client_pickup_at ? formatUAETime(job.client_pickup_at) : 'Pending Collection'}
+             
+             <div className="grid grid-cols-2 gap-x-6 gap-y-4 pt-2">
+                <div className="space-y-1">
+                  <p className="info-label !mb-0 !text-[9px]">Pickup Time</p>
+                  <div className="flex items-center gap-1.5">
+                    <Clock className="w-3 h-3 text-nokael-text-muted" />
+                    <p className="text-[11px] font-bold text-nokael-text-main whitespace-nowrap">
+                      {job.client_pickup_at ? formatUAETime(job.client_pickup_at) : 'Pending Collection'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <p className="info-label !mb-0 !text-[9px]">Job Reference</p>
+                  <div className="flex items-center gap-1.5">
+                    <Key className="w-3 h-3 text-nokael-text-muted" />
+                    <p className="text-[11px] font-bold text-nokael-text-main uppercase">
+                      {job.job_ref}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <p className="info-label !mb-0 !text-[9px]">From</p>
+                  <p className="text-[11px] font-bold text-nokael-text-main truncate">
+                    {job.pickup_location}, {job.pickup_emirate}
                   </p>
                 </div>
-              </div>
 
-              <div className="space-y-1">
-                <p className="info-label !mb-0 !text-[9px]">Job Reference</p>
-                <div className="flex items-center gap-1.5">
-                  <Key className="w-3 h-3 text-nokael-text-muted" />
-                  <p className="text-[11px] font-bold text-nokael-text-main uppercase">
-                    {job.job_ref}
+                <div className="space-y-1">
+                  <p className="info-label !mb-0 !text-[9px]">To</p>
+                  <p className="text-[11px] font-bold text-nokael-text-main truncate">
+                    {job.delivery_location}, {job.delivery_emirate}
                   </p>
                 </div>
-              </div>
-
-              <div className="space-y-1">
-                <p className="info-label !mb-0 !text-[9px]">From</p>
-                <p className="text-[11px] font-bold text-nokael-text-main truncate">
-                  {job.pickup_location}, {job.pickup_emirate}
-                </p>
-              </div>
-
-              <div className="space-y-1">
-                <p className="info-label !mb-0 !text-[9px]">To</p>
-                <p className="text-[11px] font-bold text-nokael-text-main truncate">
-                  {job.delivery_location}, {job.delivery_emirate}
-                </p>
-              </div>
-           </div>
-
-           {job.status === 'completed' && job.client_delivery_at && (
-             <div className="mt-2 pt-3 border-t border-nokael-border flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-nokael-success" />
-                  <span className="text-[10px] font-black uppercase text-nokael-success">Successfully Delivered</span>
-                </div>
-                <span className="text-[10px] font-bold text-nokael-text-muted">{formatUAETime(job.client_delivery_at)}</span>
              </div>
-           )}
-        </section>
+
+             {job.status === 'completed' && job.client_delivery_at && (
+               <div className="mt-2 pt-3 border-t border-nokael-border flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-nokael-success" />
+                    <span className="text-[10px] font-black uppercase text-nokael-success">Successfully Delivered</span>
+                  </div>
+                  <span className="text-[10px] font-bold text-nokael-text-muted">{formatUAETime(job.client_delivery_at)}</span>
+               </div>
+             )}
+          </section>
+        </>
       )}
 
       <footer className="pt-8 text-center space-y-6">

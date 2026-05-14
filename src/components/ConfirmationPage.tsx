@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { supabase } from '@/src/lib/supabase';
 import { formatUAETime, isWhatsAppBrowser } from '@/src/lib/utils';
 import { Job, Step, STEP_CONFIG, VALID_STEPS } from '@/src/types';
-import { AlertCircle, CheckCircle2, Clock, MessageSquare, Loader2, QrCode, Key, Users, History, Lock, Eye, EyeOff, WifiOff, Wifi, CloudOff } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock, MessageSquare, Loader2, QrCode, Key, Users, History, Lock, Eye, EyeOff, WifiOff, Wifi, CloudOff, MapPin, Package } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { 
   cacheJobData, 
@@ -275,6 +275,7 @@ export default function ConfirmationPage() {
               item_type, status, sender_name, recipient_name,
               client_pickup_at, driver_pickup_at, driver_delivery_at, client_delivery_at,
               pickup_lat, pickup_lng, delivery_lat, delivery_lng,
+              driver_arrived_pickup_at, sender_ready_at, driver_arrived_delivery_at,
               ${config.my_otp_field}, otp_sender, otp_driver_pickup, otp_driver_delivery, otp_recipient
             `)
             .eq(config.token_field, token)
@@ -375,6 +376,25 @@ export default function ConfirmationPage() {
       'client-delivery': 'otp_driver_delivery',
     };
     return mapping[step];
+  }
+
+  async function handleReadyUpdate(field: keyof Job) {
+    if (!online || confirming) return;
+    setConfirming(true);
+    try {
+      const { error: updateError } = await supabase
+        .from('jobs')
+        .update({ [field]: new Date().toISOString() })
+        .eq(config.token_field, token);
+      
+      if (updateError) throw updateError;
+      await fetchJob();
+    } catch (err: any) {
+      console.error('Ready update failed:', err);
+      setError('Failed to update status. Check your connection.');
+    } finally {
+      setConfirming(false);
+    }
   }
 
   async function handleConfirm() {
@@ -721,6 +741,61 @@ export default function ConfirmationPage() {
                   <p className="text-xs text-amber-700 font-bold">
                     ⚠️ Offline Mode: You can verify now. Server will validate sequence when syncing.
                   </p>
+                </div>
+              )}
+
+              {/* READINESS CONTROLS */}
+              {job && (
+                <div className="space-y-4">
+                  {step === 'driver-pickup' && !job.driver_arrived_pickup_at && (
+                    <button 
+                      onClick={() => handleReadyUpdate('driver_arrived_pickup_at')}
+                      className="w-full flex items-center justify-center gap-3 p-4 h-16 bg-nokael-primary text-white rounded-2xl text-sm font-black uppercase tracking-widest shadow-xl shadow-nokael-primary/20 hover:scale-[1.02] transition-all active:scale-[0.98]"
+                    >
+                      <MapPin className="w-5 h-5" />
+                      I'm at Pickup Location
+                    </button>
+                  )}
+                  {step === 'client-pickup' && !job.sender_ready_at && (
+                    <button 
+                      onClick={() => handleReadyUpdate('sender_ready_at')}
+                      className="w-full flex items-center justify-center gap-3 p-4 h-16 bg-nokael-accent text-white rounded-2xl text-sm font-black uppercase tracking-widest shadow-xl shadow-nokael-accent/20 hover:scale-[1.02] transition-all active:scale-[0.98]"
+                    >
+                      <Package className="w-5 h-5" />
+                      Package is Ready for Pickup
+                    </button>
+                  )}
+                  {step === 'driver-delivery' && !job.driver_arrived_delivery_at && (
+                    <button 
+                      onClick={() => handleReadyUpdate('driver_arrived_delivery_at')}
+                      className="w-full flex items-center justify-center gap-3 p-4 h-16 bg-nokael-primary text-white rounded-2xl text-sm font-black uppercase tracking-widest shadow-xl shadow-nokael-primary/20 hover:scale-[1.02] transition-all active:scale-[0.98]"
+                    >
+                      <MapPin className="w-5 h-5" />
+                      I'm at Delivery Location
+                    </button>
+                  )}
+
+                  {/* Readiness Status Notifications */}
+                  <div className="flex flex-col gap-3">
+                    {step === 'client-pickup' && job.driver_arrived_pickup_at && (
+                       <div className="flex items-center gap-3 p-4 bg-nokael-success/5 border-2 border-nokael-success/20 rounded-2xl text-[11px] font-black text-nokael-success uppercase tracking-wider animate-in zoom-in duration-300">
+                         <div className="w-2.5 h-2.5 bg-nokael-success rounded-full animate-pulse ring-4 ring-nokael-success/10" />
+                         Courier has arrived at your location
+                       </div>
+                    )}
+                    {step === 'driver-pickup' && job.sender_ready_at && (
+                       <div className="flex items-center gap-3 p-4 bg-nokael-accent/5 border-2 border-nokael-accent/20 rounded-2xl text-[11px] font-black text-nokael-accent uppercase tracking-wider animate-in zoom-in duration-300">
+                         <div className="w-2.5 h-2.5 bg-nokael-accent rounded-full animate-pulse ring-4 ring-nokael-accent/10" />
+                         Sender says package is ready
+                       </div>
+                    )}
+                    {step === 'client-delivery' && job.driver_arrived_delivery_at && (
+                       <div className="flex items-center gap-3 p-4 bg-nokael-success/5 border-2 border-nokael-success/20 rounded-2xl text-[11px] font-black text-nokael-success uppercase tracking-wider animate-in zoom-in duration-300">
+                         <div className="w-2.5 h-2.5 bg-nokael-success rounded-full animate-pulse ring-4 ring-nokael-success/10" />
+                         Courier has arrived with your package
+                       </div>
+                    )}
+                  </div>
                 </div>
               )}
               

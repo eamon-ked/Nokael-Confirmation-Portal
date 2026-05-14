@@ -21,6 +21,25 @@ import DriverMap from './DriverMap';
 const MotionDiv = lazy(() => import('motion/react').then(mod => ({ default: mod.motion.div })));
 
 function JobSummary({ job }: { job: Job }) {
+  const getDuration = () => {
+    if (!job.client_pickup_at || !job.client_delivery_at) return null;
+    
+    const start = new Date(job.client_pickup_at);
+    const end = new Date(job.client_delivery_at);
+    const diffMs = end.getTime() - start.getTime();
+    
+    if (diffMs < 0) return 'Verified';
+
+    const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    
+    if (diffHrs === 0) return `${diffMins} MIN`;
+    if (diffMins === 0) return `${diffHrs} HR`;
+    return `${diffHrs} HR ${diffMins} MIN`;
+  };
+
+  const duration = getDuration();
+
   return (
     <Suspense fallback={<div className="min-h-[400px] flex items-center justify-center"><Loader2 className="animate-spin text-nokael-primary" /></div>}>
       <MotionDiv 
@@ -34,13 +53,20 @@ function JobSummary({ job }: { job: Job }) {
           </div>
           <div className="space-y-1">
             <h2 className="text-2xl font-black text-nokael-primary italic uppercase tracking-tight">Mission Accomplished</h2>
-            <p className="text-nokael-text-muted text-sm px-4">Your delivery has been successfully verified and completed.</p>
+            <p className="text-nokael-text-muted text-sm px-4">This Job has been successfully verified and completed.</p>
           </div>
         </div>
 
         <div className="nokael-card !p-0 overflow-hidden border-nokael-border">
           <div className="bg-slate-50 px-6 py-4 border-b border-nokael-border flex justify-between items-center">
-            <span className="text-[10px] font-black uppercase tracking-widest text-nokael-primary">Delivery Certificate</span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-black uppercase tracking-widest text-nokael-primary">Delivery Certificate</span>
+              {duration && (
+                <span className="bg-nokael-primary text-white text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-tighter">
+                  {duration} TRANSIT
+                </span>
+              )}
+            </div>
             <span className="text-xs font-bold text-nokael-text-main">{job.job_ref}</span>
           </div>
           
@@ -94,7 +120,7 @@ function JobSummary({ job }: { job: Job }) {
 
         <div className="space-y-4">
           <a 
-            href="https://nokael.com/book"
+            href="https://nokael.com/get-quote"
             className="nokael-button h-16 text-lg font-black uppercase tracking-widest flex items-center justify-center gap-3 no-underline"
           >
             <QrCode className="w-6 h-6" />
@@ -104,7 +130,7 @@ function JobSummary({ job }: { job: Job }) {
           <div className="bg-slate-50 rounded-xl p-5 border border-nokael-border text-center">
             <p className="text-[10px] leading-relaxed text-nokael-text-muted font-bold uppercase tracking-wider">
               <History className="w-3.5 h-3.5 inline mr-1.5 mb-0.5 text-nokael-primary" />
-              Nokael stores this delivery metadata for 6 months for your records & chain-of-custody verification.
+              Nokael stores this JOB metadata for 6 months for your records & chain-of-custody verification.
             </p>
           </div>
         </div>

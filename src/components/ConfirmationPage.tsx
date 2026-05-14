@@ -15,6 +15,7 @@ import {
 } from '@/src/lib/offline';
 import { syncPendingConfirmations, startAutoSync, stopAutoSync } from '@/src/lib/sync';
 import { cacheCurrentPage } from '@/src/lib/serviceWorker';
+import DriverMap from './DriverMap';
 
 // Lazy load Framer Motion
 const MotionDiv = lazy(() => import('motion/react').then(mod => ({ default: mod.motion.div })));
@@ -36,6 +37,47 @@ export default function ConfirmationPage() {
   const [online, setOnline] = useState(isOnline());
   const [pendingSync, setPendingSync] = useState(false);
   const [offlineVerified, setOfflineVerified] = useState(false);
+
+  const config = STEP_CONFIG[step];
+
+  // Location tracking for drivers
+  useEffect(() => {
+    // Only track if user is a driver, job is not completed, and we are online
+    if (!job || job.status === 'completed' || config.role !== 'driver' || !online) return;
+
+    let watchId: number | null = null;
+    
+    if (navigator.geolocation) {
+      console.log('[Location] Starting driver location watcher');
+      watchId = navigator.geolocation.watchPosition(
+        async (position) => {
+          const { latitude, longitude } = position.coords;
+          try {
+            // Update the job with driver's current coordinates
+            await supabase
+              .from('jobs')
+              .update({ 
+                driver_lat: latitude, 
+                driver_lng: longitude,
+                updated_at: new Date().toISOString()
+              })
+              .eq(config.token_field, token);
+          } catch (err) {
+            console.error('Failed to update driver location:', err);
+          }
+        },
+        (err) => console.error('Geolocation error:', err),
+        { enableHighAccuracy: true, timeout: 20000, maximumAge: 10000 }
+      );
+    }
+
+    return () => {
+      if (watchId !== null) {
+        console.log('[Location] Stopping driver location watcher');
+        navigator.geolocation.clearWatch(watchId);
+      }
+    };
+  }, [job?.id, job?.status, config.role, online, token]);
 
   // Auto-hide OTP after 10 seconds for security
   function handleRevealOtp() {
@@ -98,8 +140,6 @@ export default function ConfirmationPage() {
       setLoading(true);
       setError(null);
       
-      const config = STEP_CONFIG[step];
-
       // Check if we're truly online (not just navigator.onLine)
       const actuallyOnline = isOnline();
 
@@ -115,6 +155,8 @@ export default function ConfirmationPage() {
               job_ref, pickup_emirate, pickup_location, delivery_emirate, delivery_location, 
               item_type, status, sender_name, recipient_name,
               client_pickup_at, driver_pickup_at, driver_delivery_at, client_delivery_at,
+              pickup_lat, pickup_lng, delivery_lat, delivery_lng,
+              driver_lat, driver_lng,
               ${config.my_otp_field}, otp_sender, otp_driver_pickup, otp_driver_delivery, otp_recipient
             `)
             .eq(config.token_field, token)
@@ -280,6 +322,17 @@ export default function ConfirmationPage() {
     }
   }
 
+  const getStatusLabel = (status: string) => {
+    const labels: Record<string, string> = {
+      'pending': 'Awaiting Driver',
+      'client_pickup': 'In Collection',
+      'driver_pickup': 'Package with Driver',
+      'driver_delivery': 'Arrived/Handover',
+      'completed': 'Completed'
+    };
+    return labels[status] || status;
+  };
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
@@ -324,7 +377,6 @@ export default function ConfirmationPage() {
     );
   }
 
-  const config = STEP_CONFIG[step];
   const isConfirmed = job && job[config.at_field] !== null;
   const isPartnerConfirmed = job && job[config.partner_at_field] !== null;
   const isHandoverComplete = isConfirmed && isPartnerConfirmed;
@@ -585,8 +637,73 @@ export default function ConfirmationPage() {
         </div>
       )}
 
+      {job && job.status !== 'completed' && (job.driver_lat || job.driver_lng) && (
+        <DriverMap job={job} />
+      )}
+
+      {job && (
+        <section className="nokael-card !p-5 border-nokael-border bg-slate-50/50 space-y-4 animate-in fade-in duration-700">
+           <div className="flex items-center justify-between mb-1">
+             <div className="flex items-center gap-2">
+               <History className="w-4 h-4 text-nokael-primary" />
+               <h3 className="text-[10px] font-black uppercase tracking-[0.1em] text-nokael-primary">Live Job Tracking</h3>
+             </div>
+             <div className="flex items-center gap-1">
+                <div className={`w-1.5 h-1.5 rounded-full ${job.status === 'completed' ? 'bg-nokael-success' : 'bg-nokael-accent animate-pulse'}`} />
+                <span className="text-[9px] font-black uppercase tracking-widest text-nokael-text-main">{getStatusLabel(job.status)}</span>
+             </div>
+           </div>
+           
+           <div className="grid grid-cols-2 gap-x-6 gap-y-4 pt-2">
+              <div className="space-y-1">
+                <p className="info-label !mb-0 !text-[9px]">Pickup Time</p>
+                <div className="flex items-center gap-1.5">
+                  <Clock className="w-3 h-3 text-nokael-text-muted" />
+                  <p className="text-[11px] font-bold text-nokael-text-main whitespace-nowrap">
+                    {job.client_pickup_at ? formatUAETime(job.client_pickup_at) : 'Pending Collection'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <p className="info-label !mb-0 !text-[9px]">Job Reference</p>
+                <div className="flex items-center gap-1.5">
+                  <Key className="w-3 h-3 text-nokael-text-muted" />
+                  <p className="text-[11px] font-bold text-nokael-text-main uppercase">
+                    {job.job_ref}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <p className="info-label !mb-0 !text-[9px]">From</p>
+                <p className="text-[11px] font-bold text-nokael-text-main truncate">
+                  {job.pickup_location}, {job.pickup_emirate}
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <p className="info-label !mb-0 !text-[9px]">To</p>
+                <p className="text-[11px] font-bold text-nokael-text-main truncate">
+                  {job.delivery_location}, {job.delivery_emirate}
+                </p>
+              </div>
+           </div>
+
+           {job.status === 'completed' && job.client_delivery_at && (
+             <div className="mt-2 pt-3 border-t border-nokael-border flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-nokael-success" />
+                  <span className="text-[10px] font-black uppercase text-nokael-success">Successfully Delivered</span>
+                </div>
+                <span className="text-[10px] font-bold text-nokael-text-muted">{formatUAETime(job.client_delivery_at)}</span>
+             </div>
+           )}
+        </section>
+      )}
+
       <footer className="pt-8 text-center space-y-6">
-        <div className="flex items-center justify-center gap-4 text-[10px] font-black text-nokael-text-muted/40 uppercase tracking-widest">
+        <div className="flex items-center justify-center gap-4 text-[10px] font-black text-nokael-text-muted/40 uppercase tracking-widest hidden">
            <div className="h-px w-8 bg-slate-200" />
            <span>Ref: {job?.job_ref}</span>
            <div className="h-px w-8 bg-slate-200" />

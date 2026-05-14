@@ -23,6 +23,8 @@ export interface Job {
   pickup_lng: number | null;
   delivery_lat: number | null;
   delivery_lng: number | null;
+  driver_lat?: number | null;
+  driver_lng?: number | null;
   created_at: string;
   // OTP System Columns
   otp_sender?: string;

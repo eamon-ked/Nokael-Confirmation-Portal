@@ -376,41 +376,43 @@ export default function ConfirmationPage() {
     setConfirming(true);
     setError(null);
     try {
-      console.log(`[Readiness] Updating field "${field}" for job ID: ${job.id}`);
+      console.log(`[Readiness] Updating field "${field}" using token: ${token}`);
       
-      // Use job.id for more reliable targeting since the job is already loaded
+      // Use the token for targeting as it's the primary security barrier
       const { data, error: updateError } = await supabase
         .from('jobs')
         .update({ 
-          [field]: new Date().toISOString(),
-          updated_at: new Date().toISOString() 
+          [field]: new Date().toISOString()
         })
-        .eq('id', job.id)
+        .eq(config.token_field, token)
         .select();
       
       if (updateError) {
         console.error('[Readiness] Update error:', updateError);
-        if (updateError.message?.includes('column') && updateError.message?.includes('does not exist')) {
-          setError('Database Schema Mismatch: The "Readiness" columns are missing in Supabase. Please run the SQL in supabase-schema.sql.');
-        } else if (updateError.message?.includes('policy')) {
-          setError('Security Permission Denied: Supabase RLS is blocking the update. Please check your policies.');
+        const msg = updateError.message || '';
+        if (msg.includes('column') && msg.includes('does not exist')) {
+          setError('Database Mismatch: Missing readiness columns. Contact support.');
+        } else if (msg.includes('policy') || msg.includes('permission')) {
+          setError('Security Error: Status update blocked by database rules.');
         } else {
-          throw updateError;
+          setError(`Update failed: ${updateError.message || 'Unknown error'}`);
         }
         return;
       }
 
       if (!data || data.length === 0) {
-        console.warn('[Readiness] Update successful but 0 rows returned. This usually means RLS "USING" clause failed.');
-        setError('Status update was blocked by security rules (RLS).');
+        console.warn('[Readiness] No rows affected. Check status or token.');
+        setError('Security Error: Unable to update status for this job.');
         return;
       }
 
       console.log('[Readiness] Update successful:', data[0]);
       await fetchJob();
     } catch (err: any) {
-      console.error('[Readiness] Exception:', err);
-      setError('Failed to update status. Please try again or check your connection.');
+      console.error('[Readiness] Critical failure:', err);
+      // More descriptive error for debugging
+      const errorMessage = err?.message || 'Connection error or database timeout';
+      setError(`Status update failed: ${errorMessage}. Please check your internet and try again.`);
     } finally {
       setConfirming(false);
     }

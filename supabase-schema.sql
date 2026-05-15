@@ -7,18 +7,18 @@ ADD COLUMN IF NOT EXISTS driver_lat FLOAT8,
 ADD COLUMN IF NOT EXISTS driver_lng FLOAT8;
 
 -- 2. ENABLE RLS (Security)
--- Run this if not already enabled
 ALTER TABLE jobs ENABLE ROW LEVEL SECURITY;
 
 -- 3. ADD RLS POLICIES FOR ANONYMOUS UPDATES
--- By default, Supabase blocks updates via the anon key unless a policy exists.
-
--- Policy for Public Updates (Readiness & Location)
--- We allow updates to active jobs. In production, tighten this to match tokens.
+-- We drop existing policies to ensure a clean state
 DROP POLICY IF EXISTS "Allow public update of readiness status via tokens" ON jobs;
 DROP POLICY IF EXISTS "Allow public update of driver status" ON jobs;
 DROP POLICY IF EXISTS "Allow public update of active jobs" ON jobs;
+DROP POLICY IF EXISTS "Allow public select of jobs" ON jobs;
 
+-- Policy for Public Updates (Readiness & Location Tracking)
+-- Allows updating any active (non-completed) job. 
+-- In a high-security environment, you would refine this to check tokens explicitly.
 CREATE POLICY "Allow public update of active jobs" 
 ON jobs 
 FOR UPDATE 
@@ -27,7 +27,7 @@ USING (status != 'completed')
 WITH CHECK (status != 'completed');
 
 -- Policy for Public Selection (Viewing the Page)
-DROP POLICY IF EXISTS "Allow public select of jobs" ON jobs;
+-- Allows reading any job record with a public token.
 CREATE POLICY "Allow public select of jobs" 
 ON jobs 
 FOR SELECT 

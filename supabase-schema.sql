@@ -17,6 +17,7 @@ ALTER TABLE jobs ENABLE ROW LEVEL SECURITY;
 -- We allow updates to active jobs. In production, tighten this to match tokens.
 DROP POLICY IF EXISTS "Allow public update of readiness status via tokens" ON jobs;
 DROP POLICY IF EXISTS "Allow public update of driver status" ON jobs;
+DROP POLICY IF EXISTS "Allow public update of active jobs" ON jobs;
 
 CREATE POLICY "Allow public update of active jobs" 
 ON jobs 

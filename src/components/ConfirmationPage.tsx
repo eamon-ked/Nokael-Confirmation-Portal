@@ -724,6 +724,61 @@ export default function ConfirmationPage() {
             <p className="text-sm text-nokael-text-muted line-clamp-2 leading-relaxed font-medium">Verify the physical handover with the {config.partner_role} to continue the chain of custody.</p>
           </div>
 
+          {/* READINESS CONTROLS (Moved here to be visible even if OTP verification is not yet active) */}
+          {job && state !== 'confirmed' && state !== 'waiting_partner' && (
+            <div className="space-y-4 animate-in fade-in duration-500">
+              {step === 'driver-pickup' && !job.driver_arrived_pickup_at && (
+                <button 
+                  onClick={() => handleReadyUpdate('driver_arrived_pickup_at')}
+                  className="w-full flex items-center justify-center gap-3 p-4 h-16 bg-nokael-primary text-white rounded-2xl text-sm font-black uppercase tracking-widest shadow-xl shadow-nokael-primary/20 hover:scale-[1.02] transition-all active:scale-[0.98]"
+                >
+                  <MapPin className="w-5 h-5" />
+                  I'm at Pickup Location
+                </button>
+              )}
+              {step === 'client-pickup' && !job.sender_ready_at && (
+                <button 
+                  onClick={() => handleReadyUpdate('sender_ready_at')}
+                  className="w-full flex items-center justify-center gap-3 p-4 h-16 bg-nokael-accent text-white rounded-2xl text-sm font-black uppercase tracking-widest shadow-xl shadow-nokael-accent/20 hover:scale-[1.02] transition-all active:scale-[0.98]"
+                >
+                  <Package className="w-5 h-5" />
+                  Package is Ready for Pickup
+                </button>
+              )}
+              {step === 'driver-delivery' && !job.driver_arrived_delivery_at && (
+                <button 
+                  onClick={() => handleReadyUpdate('driver_arrived_delivery_at')}
+                  className="w-full flex items-center justify-center gap-3 p-4 h-16 bg-nokael-primary text-white rounded-2xl text-sm font-black uppercase tracking-widest shadow-xl shadow-nokael-primary/20 hover:scale-[1.02] transition-all active:scale-[0.98]"
+                >
+                  <MapPin className="w-5 h-5" />
+                  I'm at Delivery Location
+                </button>
+              )}
+
+              {/* Readiness Status Notifications */}
+              <div className="flex flex-col gap-3">
+                {step === 'client-pickup' && job.driver_arrived_pickup_at && (
+                   <div className="flex items-center gap-3 p-4 bg-nokael-success/5 border-2 border-nokael-success/20 rounded-2xl text-[11px] font-black text-nokael-success uppercase tracking-wider">
+                     <div className="w-2.5 h-2.5 bg-nokael-success rounded-full animate-pulse ring-4 ring-nokael-success/10" />
+                     Courier has arrived at your location
+                   </div>
+                )}
+                {step === 'driver-pickup' && job.sender_ready_at && (
+                   <div className="flex items-center gap-3 p-4 bg-nokael-accent/5 border-2 border-nokael-accent/20 rounded-2xl text-[11px] font-black text-nokael-accent uppercase tracking-wider">
+                     <div className="w-2.5 h-2.5 bg-nokael-accent rounded-full animate-pulse ring-4 ring-nokael-accent/10" />
+                     Sender says package is ready
+                   </div>
+                )}
+                {step === 'client-delivery' && job.driver_arrived_delivery_at && (
+                   <div className="flex items-center gap-3 p-4 bg-nokael-success/5 border-2 border-nokael-success/20 rounded-2xl text-[11px] font-black text-nokael-success uppercase tracking-wider">
+                     <div className="w-2.5 h-2.5 bg-nokael-success rounded-full animate-pulse ring-4 ring-nokael-success/10" />
+                     Courier has arrived with your package
+                   </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {state === 'not_yet' ? (
             <div className="space-y-4">
               <div className="bg-slate-100/50 border border-nokael-border rounded-2xl p-6 flex flex-col items-center gap-3 text-center">
@@ -763,61 +818,6 @@ export default function ConfirmationPage() {
                 </div>
               )}
 
-              {/* READINESS CONTROLS */}
-              {job && (
-                <div className="space-y-4">
-                  {step === 'driver-pickup' && !job.driver_arrived_pickup_at && (
-                    <button 
-                      onClick={() => handleReadyUpdate('driver_arrived_pickup_at')}
-                      className="w-full flex items-center justify-center gap-3 p-4 h-16 bg-nokael-primary text-white rounded-2xl text-sm font-black uppercase tracking-widest shadow-xl shadow-nokael-primary/20 hover:scale-[1.02] transition-all active:scale-[0.98]"
-                    >
-                      <MapPin className="w-5 h-5" />
-                      I'm at Pickup Location
-                    </button>
-                  )}
-                  {step === 'client-pickup' && !job.sender_ready_at && (
-                    <button 
-                      onClick={() => handleReadyUpdate('sender_ready_at')}
-                      className="w-full flex items-center justify-center gap-3 p-4 h-16 bg-nokael-accent text-white rounded-2xl text-sm font-black uppercase tracking-widest shadow-xl shadow-nokael-accent/20 hover:scale-[1.02] transition-all active:scale-[0.98]"
-                    >
-                      <Package className="w-5 h-5" />
-                      Package is Ready for Pickup
-                    </button>
-                  )}
-                  {step === 'driver-delivery' && !job.driver_arrived_delivery_at && (
-                    <button 
-                      onClick={() => handleReadyUpdate('driver_arrived_delivery_at')}
-                      className="w-full flex items-center justify-center gap-3 p-4 h-16 bg-nokael-primary text-white rounded-2xl text-sm font-black uppercase tracking-widest shadow-xl shadow-nokael-primary/20 hover:scale-[1.02] transition-all active:scale-[0.98]"
-                    >
-                      <MapPin className="w-5 h-5" />
-                      I'm at Delivery Location
-                    </button>
-                  )}
-
-                  {/* Readiness Status Notifications */}
-                  <div className="flex flex-col gap-3">
-                    {step === 'client-pickup' && job.driver_arrived_pickup_at && (
-                       <div className="flex items-center gap-3 p-4 bg-nokael-success/5 border-2 border-nokael-success/20 rounded-2xl text-[11px] font-black text-nokael-success uppercase tracking-wider animate-in zoom-in duration-300">
-                         <div className="w-2.5 h-2.5 bg-nokael-success rounded-full animate-pulse ring-4 ring-nokael-success/10" />
-                         Courier has arrived at your location
-                       </div>
-                    )}
-                    {step === 'driver-pickup' && job.sender_ready_at && (
-                       <div className="flex items-center gap-3 p-4 bg-nokael-accent/5 border-2 border-nokael-accent/20 rounded-2xl text-[11px] font-black text-nokael-accent uppercase tracking-wider animate-in zoom-in duration-300">
-                         <div className="w-2.5 h-2.5 bg-nokael-accent rounded-full animate-pulse ring-4 ring-nokael-accent/10" />
-                         Sender says package is ready
-                       </div>
-                    )}
-                    {step === 'client-delivery' && job.driver_arrived_delivery_at && (
-                       <div className="flex items-center gap-3 p-4 bg-nokael-success/5 border-2 border-nokael-success/20 rounded-2xl text-[11px] font-black text-nokael-success uppercase tracking-wider animate-in zoom-in duration-300">
-                         <div className="w-2.5 h-2.5 bg-nokael-success rounded-full animate-pulse ring-4 ring-nokael-success/10" />
-                         Courier has arrived with your package
-                       </div>
-                    )}
-                  </div>
-                </div>
-              )}
-              
               {/* OTP Input Section */}
               <div className="space-y-4">
                 <div className="info-label text-center !text-nokael-primary mb-2">

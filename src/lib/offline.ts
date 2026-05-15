@@ -155,10 +155,24 @@ export async function getPendingConfirmations(): Promise<PendingConfirmation[]> 
   const index = store.index('synced');
 
   return new Promise((resolve, reject) => {
-    const request = index.getAll(IDBKeyRange.only(false));
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+    // Ensure the index exists and we are passing a valid key
+    try {
+      const request = index.getAll(IDBKeyRange.only(0)); // SQLite/IndexedDB sometimes treat booleans as 0/1 or need specific keys
+      // Actually, standard approach:
+      const req = index.getAll(false); 
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    } catch (e) {
+      // Fallback for older browsers or weird IndexedDB states
+      const request = store.getAll();
+      request.onsuccess = () => {
+        const all = request.result as PendingConfirmation[];
+        resolve(all.filter(c => !c.synced));
+      };
+      request.onerror = () => reject(request.error);
+    }
   });
+
 }
 
 // Mark confirmation as synced

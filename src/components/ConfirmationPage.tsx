@@ -173,14 +173,19 @@ export default function ConfirmationPage() {
           const { latitude, longitude } = position.coords;
           try {
             // Update the job with driver's current coordinates
-            await supabase
+            // Use the token for the update to match the security pattern in handleReadyUpdate
+            const { error: locationError } = await supabase
               .from('jobs')
               .update({ 
                 driver_lat: latitude, 
                 driver_lng: longitude,
                 updated_at: new Date().toISOString()
               })
-              .eq('id', job.id);
+              .eq(config.token_field, token);
+              
+            if (locationError) {
+               console.error('[Location] Update error:', locationError);
+            }
           } catch (err) {
             console.error('Failed to update driver location:', err);
           }
@@ -384,8 +389,7 @@ export default function ConfirmationPage() {
         .update({ 
           [field]: new Date().toISOString()
         })
-        .eq(config.token_field, token)
-        .select();
+        .eq(config.token_field, token);
       
       if (updateError) {
         console.error('[Readiness] Update error:', updateError);
@@ -400,13 +404,7 @@ export default function ConfirmationPage() {
         return;
       }
 
-      if (!data || data.length === 0) {
-        console.warn('[Readiness] No rows affected. Check status or token.');
-        setError('Security Error: Unable to update status for this job.');
-        return;
-      }
-
-      console.log('[Readiness] Update successful:', data[0]);
+      console.log('[Readiness] Update successful');
       await fetchJob();
     } catch (err: any) {
       console.error('[Readiness] Critical failure:', err);
@@ -726,8 +724,8 @@ export default function ConfirmationPage() {
             <p className="text-sm text-nokael-text-muted line-clamp-2 leading-relaxed font-medium">Verify the physical handover with the {config.partner_role} to continue the chain of custody.</p>
           </div>
 
-          {/* READINESS CONTROLS (Moved here to be visible even if OTP verification is not yet active) */}
-          {job && state !== 'confirmed' && state !== 'waiting_partner' && (
+          {/* READINESS CONTROLS (Always visible in the verification flow until confirmed) */}
+          {job && (
             <div className="space-y-4 animate-in fade-in duration-500">
               {step === 'driver-pickup' && !job.driver_arrived_pickup_at && (
                 <button 

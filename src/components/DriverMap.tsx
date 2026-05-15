@@ -137,8 +137,8 @@ export default function DriverMap({ job }: DriverMapProps) {
   const mapCenter: [number, number] = driver || pickup || [25.2048, 55.2708];
 
   return (
-    <div className="nokael-card !p-0 overflow-hidden border-nokael-border shadow-lg">
-      <div style={{ height: '280px' }} className="w-full relative bg-slate-100">
+    <div className="nokael-card !p-0 overflow-hidden border-nokael-border shadow-2xl bg-white group">
+      <div className="h-[300px] sm:h-[400px] lg:h-[450px] w-full relative bg-slate-100 transition-all duration-500">
         <MapContainer 
           center={mapCenter} 
           zoom={13} 
@@ -165,35 +165,55 @@ export default function DriverMap({ job }: DriverMapProps) {
         </MapContainer>
 
         {/* TOP OVERLAY: LIVE INDICATOR */}
-        <div className="absolute top-4 left-4 z-[1000] flex items-center gap-2 bg-white/95 backdrop-blur px-3 py-1.5 rounded-full border border-nokael-border shadow-sm ring-1 ring-black/5">
-          <div className="w-2 h-2 bg-nokael-accent rounded-full animate-pulse" />
-          <span className="text-[9px] font-black uppercase text-nokael-primary tracking-[0.15em]">Live Driver Tracking</span>
+        <div className="absolute top-6 left-6 z-[1000] flex items-center gap-2.5 bg-white/95 backdrop-blur px-4 py-2 rounded-full border border-nokael-border shadow-xl ring-1 ring-black/5 animate-in slide-in-from-left duration-700">
+          <div className="w-2.5 h-2.5 bg-nokael-accent rounded-full animate-pulse shadow-[0_0_12px_rgba(255,165,0,0.5)]" />
+          <span className="text-[10px] font-black uppercase text-nokael-primary tracking-[0.2em]">Live Tracking</span>
         </div>
 
         {/* TOP RIGHT: ETA OVERLAY */}
         {eta && (
-          <div className="absolute top-4 right-4 z-[1000] animate-in slide-in-from-top duration-500">
-            <div className="bg-nokael-primary text-white px-4 py-2 rounded-2xl shadow-xl flex items-center gap-2 border border-white/20">
-              <Clock className="w-3 h-3" />
-              <span className="text-[10px] font-black tracking-widest">{eta}</span>
+          <div className="absolute top-6 right-6 z-[1000] animate-in slide-in-from-right zoom-in duration-500">
+            <div className="bg-nokael-primary text-white pl-4 pr-5 py-2.5 rounded-2xl shadow-2xl flex items-center gap-3 border border-white/20">
+              <Clock className="w-4 h-4 text-nokael-accent" />
+              <div className="flex flex-col">
+                <span className="text-[8px] font-black uppercase tracking-widest text-white/60">Estimated Entry</span>
+                <span className="text-xs font-black tracking-widest leading-none">{eta}</span>
+              </div>
             </div>
           </div>
         )}
+
+        {/* BOTTOM RIGHT: FOCUS ICON */}
+        <div className="absolute bottom-6 right-6 z-[1000] animate-in fade-in duration-1000">
+           <div className="w-10 h-10 bg-white/95 backdrop-blur rounded-xl border border-nokael-border shadow-lg flex items-center justify-center text-nokael-primary hover:bg-white cursor-pointer transition-colors">
+              <Navigation className="w-5 h-5" />
+           </div>
+        </div>
       </div>
 
-      <div className="p-4 bg-white border-t border-nokael-border flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-nokael-primary/5 rounded-xl flex items-center justify-center border border-nokael-primary/10">
-            <Navigation className="w-5 h-5 text-nokael-primary" />
+      <div className="p-6 bg-white border-t border-nokael-border flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 bg-nokael-primary/5 rounded-2xl flex items-center justify-center border border-nokael-primary/10 shadow-inner">
+            <Navigation className="w-6 h-6 text-nokael-primary" />
           </div>
           <div>
-            <p className="text-[9px] font-black uppercase text-nokael-primary/60 tracking-wider">Navigation Active</p>
-            <p className="text-xs font-bold text-nokael-text-main">
-              {driver ? 'Real-time GPS Connected' : 'Acquiring GPS Signal...'}
+            <p className="text-[10px] font-black uppercase text-nokael-primary/40 tracking-[0.15em] mb-0.5">Asset Location Status</p>
+            <p className="text-sm font-black text-nokael-primary uppercase">
+              {driver ? 'Position Uplink Active' : 'Polling Satellite Signal...'}
             </p>
           </div>
         </div>
-        {!driver && <Loader2 className="w-4 h-4 text-nokael-accent animate-spin" />}
+        {!driver ? (
+          <div className="flex items-center gap-3 bg-nokael-accent/5 px-4 py-2 rounded-xl border border-nokael-accent/10">
+            <span className="text-[10px] font-black uppercase text-nokael-accent tracking-widest">Searching...</span>
+            <Loader2 className="w-4 h-4 text-nokael-accent animate-spin" />
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 bg-nokael-success/5 px-4 py-2 rounded-xl border border-nokael-success/10">
+             <div className="w-1.5 h-1.5 bg-nokael-success rounded-full animate-pulse" />
+             <span className="text-[10px] font-black uppercase text-nokael-success tracking-widest">Synced</span>
+          </div>
+        )}
       </div>
     </div>
   );

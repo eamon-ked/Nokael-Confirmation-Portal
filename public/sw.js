@@ -10,7 +10,7 @@ const RUNTIME_CACHE = 'nokael-runtime-v1';
 const PRECACHE_ASSETS = [
   '/',
   '/index.html',
-  '/nokael-logo.svg',
+  '/nokael-logo.jpg',
   '/src/main.tsx',
   '/src/App.tsx',
   '/src/index.css',

@@ -1220,7 +1220,7 @@ export default function ConfirmationPage() {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-8 min-h-screen flex flex-col">
         <header className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src="/nokael-logo.svg" alt="Nokael" className="h-7 sm:h-8" onError={(e) => (e.currentTarget.style.display = 'none')} />
+            <img src="/nokael-logo.jpg" alt="Nokael" className="h-7 sm:h-8 rounded-md border border-slate-800" referrerPolicy="no-referrer" onError={(e) => (e.currentTarget.style.display = 'none')} />
             <span className="text-xl sm:text-2xl font-[900] tracking-tighter text-nokael-primary uppercase italic">NOKAEL</span>
           </div>
           <div className="flex items-center gap-2">

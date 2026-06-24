@@ -159,7 +159,7 @@ export async function getPendingConfirmations(): Promise<PendingConfirmation[]> 
     try {
       const request = index.getAll(IDBKeyRange.only(0)); // SQLite/IndexedDB sometimes treat booleans as 0/1 or need specific keys
       // Actually, standard approach:
-      const req = index.getAll(false); 
+      const req = index.getAll(false as any); 
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
     } catch (e) {

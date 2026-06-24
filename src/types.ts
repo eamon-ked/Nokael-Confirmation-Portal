@@ -29,6 +29,7 @@ export interface Job {
   sender_ready_at?: string | null;
   driver_arrived_delivery_at?: string | null;
   created_at: string;
+  driver_phone?: string;
   // OTP System Columns
   otp_sender?: string;
   otp_driver_pickup?: string;

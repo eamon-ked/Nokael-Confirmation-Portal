@@ -1145,21 +1145,26 @@ export default function ConfirmationPage() {
     );
   }
 
-  if (!isValidStep || error?.includes('not valid')) {
+  if (!isValidStep || !job) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 text-center px-6">
         <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center">
           <AlertCircle className="w-8 h-8 text-slate-400" />
         </div>
         <div className="space-y-2">
-          <h1 className="text-2xl font-bold text-nokael-primary">Invalid Link</h1>
-          <p className="text-nokael-text-muted text-sm">This link is not valid or has expired.</p>
+          <h1 className="text-2xl font-bold text-nokael-primary">
+            {error ? 'Unable to Load Job' : 'Invalid Link'}
+          </h1>
+          <p className="text-nokael-text-muted text-sm max-w-md mx-auto">
+            {error || 'This link is not valid or has expired.'}
+          </p>
         </div>
         <a href="https://wa.me/971509999999" className="text-nokael-accent font-bold text-sm underline underline-offset-4">Contact Nokael Dispatch</a>
       </div>
     );
   }
 
+  const myOtp = job && config ? (job[config.my_otp_field] as string) : '';
   const isConfirmed = job && job[config.at_field] !== null;
   const isPartnerConfirmed = job && job[config.partner_at_field] !== null;
   const isHandoverComplete = isConfirmed && isPartnerConfirmed;

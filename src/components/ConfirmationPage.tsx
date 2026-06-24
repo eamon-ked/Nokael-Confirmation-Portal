@@ -348,7 +348,7 @@ function CourierView({ job, step, online, handleReadyUpdate, partnerOtp, setPart
   );
 }
 
-function RecipientView({ job, myOtp, showMyOtp, handleRevealOtp }: ViewProps) {
+function RecipientView({ job, step, config, online, handleReadyUpdate, handleRevealOtp, showMyOtp, partnerOtp, setPartnerOtp, handleConfirm, error, myOtp, confirming }: ViewProps) {
   const [isDriverClose, setIsDriverClose] = useState(false);
   const [distance, setDistance] = useState<number | null>(null);
 
@@ -401,49 +401,130 @@ function RecipientView({ job, myOtp, showMyOtp, handleRevealOtp }: ViewProps) {
           )}
           <DriverMap job={job} />
           {isDriverClose && (
-            <div className="absolute inset-0 bg-nokael-primary/80 backdrop-blur-md z-20 flex flex-col items-center justify-center text-center p-12 animate-in fade-in duration-1000">
-               <div className="w-24 h-24 bg-white rounded-3xl flex items-center justify-center shadow-2xl mb-8 animate-in zoom-in spin-in-45 duration-1000">
-                  <Package className="w-12 h-12 text-nokael-primary" />
+            <div className="absolute inset-0 bg-nokael-primary/80 backdrop-blur-md z-20 flex flex-col items-center justify-center text-center p-6 sm:p-12 overflow-y-auto animate-in fade-in duration-1000">
+               <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center shadow-2xl mb-4 shrink-0 animate-in zoom-in spin-in-45 duration-1000">
+                  <Package className="w-8 h-8 text-nokael-primary" />
                </div>
-               <h1 className="text-4xl font-black text-white uppercase tracking-tighter mb-2 italic">Courier Has Arrived</h1>
-               <p className="text-white/70 text-lg font-medium max-w-sm mb-12">
-                 Your secure legal courier is in the lobby. Please present the 4-digit code below to release the files.
+               <h1 className="text-2xl sm:text-3xl font-black text-white uppercase tracking-tighter mb-1 italic">Courier Has Arrived</h1>
+               <p className="text-white/70 text-sm font-medium max-w-sm mb-6 leading-relaxed">
+                 Your secure legal courier is in the lobby. You can share your code below with them, or enter their code to close the delivery.
                </p>
-               <div className="bg-white rounded-[32px] p-10 w-full max-w-sm shadow-[0_32px_64px_-12px_rgba(0,0,0,0.4)]">
-                 <p className="info-label text-nokael-primary/40 !mb-4">Handover Verification Code</p>
-                 <div className="text-7xl font-black font-mono tracking-[0.3em] text-nokael-primary mb-4">{myOtp}</div>
-                 <div className="h-1 w-24 bg-nokael-primary/10 rounded-full mx-auto" />
+               
+               <div className="bg-white rounded-[28px] p-6 sm:p-8 w-full max-w-sm shadow-[0_32px_64px_-12px_rgba(0,0,0,0.4)] space-y-6">
+                 <div>
+                   <p className="info-label text-nokael-primary/40 !mb-2 text-[9px] tracking-widest uppercase">Your Verification Code</p>
+                   <div className="text-5xl font-black font-mono tracking-[0.2em] text-nokael-primary">{myOtp}</div>
+                   <p className="text-[10px] text-nokael-text-muted mt-1 font-bold italic">Courier can enter this on their device</p>
+                 </div>
+                 
+                 <div className="relative flex items-center justify-center py-2">
+                   <div className="h-px bg-slate-100 w-full" />
+                   <span className="absolute bg-white px-3 text-[8px] font-black uppercase tracking-[0.15em] text-nokael-primary/30">OR ENTER COURIER'S CODE</span>
+                 </div>
+
+                 <div className="space-y-4">
+                   <div className="relative">
+                     <input 
+                       type="text" 
+                       inputMode="numeric"
+                       placeholder="••••••"
+                       className={`w-full h-16 bg-white border-2 rounded-2xl text-2xl font-black font-mono tracking-[0.3em] text-center focus:ring-8 transition-all outline-none
+                         ${error ? 'border-red-200 focus:ring-red-50/50 bg-red-50/10' : 'border-nokael-border focus:ring-nokael-primary/5 focus:border-nokael-primary'}`}
+                       value={partnerOtp}
+                       onChange={(e) => setPartnerOtp(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
+                     />
+                   </div>
+                   {error && (
+                     <div className="flex items-center justify-center gap-2 p-3 bg-red-50 border border-red-100 rounded-xl text-[10px] font-black text-red-600 uppercase tracking-widest animate-in shake duration-300">
+                       <AlertCircle className="w-3.5 h-3.5" />
+                       <span className="truncate">{error}</span>
+                     </div>
+                   )}
+                   <button
+                     className="w-full h-14 bg-slate-900 text-white rounded-2xl text-xs font-black uppercase tracking-[0.15em] hover:bg-nokael-primary transition-all flex items-center justify-center"
+                     onClick={handleConfirm}
+                     disabled={confirming || partnerOtp.length !== 6}
+                   >
+                     {confirming ? <Loader2 className="w-5 h-5 animate-spin" /> : '➔ Confirm Secure Receipt'}
+                   </button>
+                 </div>
                </div>
-               <button onClick={() => setIsDriverClose(false)} className="mt-8 text-white/40 text-[10px] font-black uppercase tracking-[0.3em] hover:text-white transition-colors">
+
+               <button onClick={() => setIsDriverClose(false)} className="mt-6 text-white/40 text-[10px] font-black uppercase tracking-[0.3em] hover:text-white transition-colors">
                   ➔ Show Map Coverage
                </button>
             </div>
           )}
        </div>
        {!isDriverClose && (
-         <div className="nokael-card !p-8 border-nokael-border bg-white shadow-xl flex flex-col items-center justify-center gap-6 animate-in slide-in-from-bottom duration-700">
-            <div className="flex items-center gap-4 text-nokael-primary/30">
-               <ShieldCheck className="w-6 h-6" />
-               <h3 className="text-sm font-black uppercase tracking-[0.3em]">Secure Receiver Channel</h3>
-            </div>
-            {showMyOtp ? (
-              <div className="space-y-4 text-center">
-                 <p className="text-[11px] font-black text-nokael-primary/40 uppercase tracking-widest">Share this with courier upon arrival</p>
-                 <div className="text-5xl font-black font-mono tracking-[0.4em] text-nokael-primary bg-slate-50 p-6 rounded-2xl border-2 border-slate-100">{myOtp}</div>
-                 <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest">Hides in 10s for security</p>
+         <div className="space-y-6">
+           <div className="nokael-card !p-8 border-nokael-border bg-white shadow-xl flex flex-col items-center justify-center gap-6 animate-in slide-in-from-bottom duration-700">
+              <div className="flex items-center gap-4 text-nokael-primary/30">
+                 <ShieldCheck className="w-6 h-6" />
+                 <h3 className="text-sm font-black uppercase tracking-[0.3em]">Secure Receiver Channel</h3>
               </div>
-            ) : (
-              <button 
-                onClick={handleRevealOtp}
-                className="w-full flex items-center justify-center gap-3 p-6 bg-slate-50 border-2 border-dashed border-nokael-border rounded-3xl text-nokael-text-muted hover:bg-slate-100 transition-all active:scale-[0.98] group"
-              >
-                <Lock className="w-6 h-6 group-hover:scale-110" />
-                <span className="text-sm font-black uppercase tracking-[0.2em]">Reveal Arrival Code</span>
-              </button>
-            )}
-            <p className="text-[11px] text-nokael-text-muted font-bold text-center leading-relaxed">
-               The verification code is locked until the courier physically crosses the geofence surrounding the drop-off zone.
-            </p>
+              {showMyOtp ? (
+                <div className="space-y-4 text-center w-full">
+                   <p className="text-[11px] font-black text-nokael-primary/40 uppercase tracking-widest">Share this with courier upon arrival</p>
+                   <div className="text-5xl font-black font-mono tracking-[0.4em] text-nokael-primary bg-slate-50 p-6 rounded-2xl border-2 border-slate-100">{myOtp}</div>
+                   <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest">Hides in 10s for security</p>
+                </div>
+              ) : (
+                <button 
+                  onClick={handleRevealOtp}
+                  className="w-full flex items-center justify-center gap-3 p-6 bg-slate-50 border-2 border-dashed border-nokael-border rounded-3xl text-nokael-text-muted hover:bg-slate-100 transition-all active:scale-[0.98] group"
+                >
+                  <Lock className="w-6 h-6 group-hover:scale-110" />
+                  <span className="text-sm font-black uppercase tracking-[0.2em]">Reveal Arrival Code</span>
+                </button>
+              )}
+              <p className="text-[11px] text-nokael-text-muted font-bold text-center leading-relaxed">
+                 The verification code is locked until the courier physically crosses the geofence surrounding the drop-off zone.
+              </p>
+           </div>
+
+           {/* Direct Courier OTP Verification close-out for Client */}
+           <div className="nokael-card !p-8 border-nokael-border bg-white shadow-xl space-y-6 animate-in slide-in-from-bottom duration-700 delay-100">
+             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+               <div>
+                 <span className="text-[9px] font-black uppercase tracking-[0.25em] text-nokael-primary/30">Direct Verification</span>
+                 <h4 className="text-sm font-black text-nokael-primary uppercase tracking-tight mt-0.5">Enter Courier's Secure Code</h4>
+               </div>
+               <div className="px-2.5 py-1 bg-nokael-accent/10 border border-nokael-accent/15 rounded-full text-[9px] font-black uppercase tracking-widest text-nokael-accent">
+                 Receiver Close-Out
+               </div>
+             </div>
+             
+             <div className="space-y-4">
+               <p className="text-xs text-nokael-text-muted font-bold leading-relaxed">
+                 If the courier has handed over the assets physically, ask them for their 6-digit Courier Security Code and enter it below to authorize instant close-out of this delivery.
+               </p>
+               <div className="relative">
+                 <input 
+                   type="text" 
+                   inputMode="numeric"
+                   placeholder="••••••"
+                   className={`w-full h-20 bg-white border-2 rounded-[24px] text-3xl font-black font-mono tracking-[0.4em] text-center focus:ring-10 transition-all outline-none shadow-md
+                     ${error ? 'border-red-200 focus:ring-red-50/50 bg-red-50/10' : 'border-nokael-border focus:ring-nokael-primary/5 focus:border-nokael-primary'}`}
+                   value={partnerOtp}
+                   onChange={(e) => setPartnerOtp(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
+                 />
+               </div>
+               {error && (
+                 <div className="flex items-center justify-center gap-3 p-4 bg-red-50 border border-red-100 rounded-2xl text-[12px] font-black text-red-600 uppercase tracking-widest animate-in shake duration-300">
+                   <AlertCircle className="w-4 h-4" />
+                   {error}
+                 </div>
+               )}
+               <button
+                 className="nokael-button h-16 text-base font-black uppercase tracking-[0.2em] shadow-lg bg-slate-900 text-white rounded-2xl hover:scale-[1.01] active:scale-[0.99] transition-all"
+                 onClick={handleConfirm}
+                 disabled={confirming || partnerOtp.length !== 6}
+               >
+                 {confirming ? <Loader2 className="w-6 h-6 animate-spin" /> : '➔ Verify Delivery Receipt'}
+               </button>
+             </div>
+           </div>
          </div>
        )}
        <div className="grid grid-cols-2 gap-4">
@@ -953,8 +1034,10 @@ export default function ConfirmationPage() {
     const interval = setInterval(() => {
       if (isOnline() && !confirming) {
         supabase.from('jobs').select('*').eq(config.token_field, token).single()
-          .then(({ data }) => { if (data) setJob(data as Job); })
-          .catch((err) => console.debug('Quiet poll failed:', err));
+          .then(
+            ({ data }) => { if (data) setJob(data as Job); },
+            (err) => console.debug('Quiet poll failed:', err)
+          );
       }
     }, 5000);
 

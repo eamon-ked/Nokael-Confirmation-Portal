@@ -691,6 +691,7 @@ export default function ConfirmationPage() {
   const [offlineVerified, setOfflineVerified] = useState(false);
 
   const config = STEP_CONFIG[step];
+  const myOtp = job && config ? (job[config.my_otp_field] as string) : '';
 
   // Location tracking for drivers with Background Support
   useEffect(() => {
@@ -997,7 +998,6 @@ export default function ConfirmationPage() {
     setError(null);
 
     try {
-      const myOtp = job ? (job[config.my_otp_field] as string) : '';
       if (partnerOtp === myOtp) {
         setError(`Security Error: You entered your own code (${myOtp}). You MUST enter the code from the other person's device.`);
         setConfirming(false);
@@ -1047,7 +1047,6 @@ export default function ConfirmationPage() {
         // Partner code is correct! Now call the RPC with the code it expects (the user's OWN code)
         // This effectively completes the cross-verification loop.
         try {
-          const myOtp = job ? (job[config.my_otp_field] as string) : '';
           const { data, error: rpcError } = await supabase.rpc('confirm_job_step', {
             p_token: token,
             p_step: config.rpc_step,
@@ -1164,7 +1163,6 @@ export default function ConfirmationPage() {
     );
   }
 
-  const myOtp = job && config ? (job[config.my_otp_field] as string) : '';
   const isConfirmed = job && job[config.at_field] !== null;
   const isPartnerConfirmed = job && job[config.partner_at_field] !== null;
   const isHandoverComplete = isConfirmed && isPartnerConfirmed;

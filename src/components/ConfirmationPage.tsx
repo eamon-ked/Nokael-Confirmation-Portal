@@ -184,7 +184,7 @@ function SenderView({ job, step, config, online, handleReadyUpdate, handleReveal
   );
 }
 
-function CourierView({ job, step, online, handleReadyUpdate, partnerOtp, setPartnerOtp, handleConfirm, error, confirming }: ViewProps) {
+function CourierView({ job, step, online, handleReadyUpdate, partnerOtp, setPartnerOtp, handleConfirm, error, confirming, myOtp, showMyOtp, handleRevealOtp }: ViewProps) {
   const isPickup = step === 'driver-pickup';
   
   const handleNavigationLaunch = () => {
@@ -230,6 +230,34 @@ function CourierView({ job, step, online, handleReadyUpdate, partnerOtp, setPart
             <Navigation className="w-6 h-6 fill-white" />
             Launch External Navigation
           </button>
+        </div>
+
+        <div className="nokael-card !p-8 border-nokael-accent/20 bg-nokael-accent/[0.02] shadow-2xl relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+            <ShieldCheck className="w-32 h-32 text-nokael-accent" />
+          </div>
+          
+          <div className="space-y-6 relative z-10">
+            <div className="text-center space-y-4">
+               <p className="info-label text-nokael-accent !mb-0 font-black tracking-[0.2em]">Your Courier Security Code</p>
+               <button
+                 onClick={handleRevealOtp}
+                 className="w-full relative flex items-center justify-center py-8 rounded-3xl border-2 border-dashed border-nokael-accent/30 bg-white shadow-xl shadow-nokael-accent/5 transition-all active:scale-[0.98] group"
+               >
+                 {showMyOtp ? (
+                   <span className="text-6xl font-black font-mono tracking-[0.2em] text-nokael-primary select-all drop-shadow-sm">{myOtp}</span>
+                 ) : (
+                   <div className="flex flex-col items-center gap-2 text-nokael-accent">
+                     <QrCode className="w-10 h-10 group-hover:scale-110 transition-transform mb-1" />
+                     <span className="text-sm font-black uppercase tracking-[0.25em]">Tap to Reveal Code</span>
+                   </div>
+                 )}
+               </button>
+               <p className="text-[12px] text-nokael-text-muted font-bold italic">
+                 {showMyOtp ? '⚠ Hides in 10s — verbal sharing only' : 'The client needs this code to verify your credentials'}
+               </p>
+            </div>
+          </div>
         </div>
 
         {isPickup && job.sender_ready_at && (

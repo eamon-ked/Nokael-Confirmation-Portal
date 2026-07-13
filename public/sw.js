@@ -3,8 +3,12 @@
  * Enables offline page loading and asset caching
  */
 
-const CACHE_NAME = 'nokael-v1';
-const RUNTIME_CACHE = 'nokael-runtime-v1';
+// Bump these version suffixes on every deploy that fixes a bug — the fetch
+// handler below serves JS/CSS cache-first, so devices that already installed
+// an old service worker will keep running a stale (possibly broken/
+// misconfigured) bundle indefinitely unless the cache name changes.
+const CACHE_NAME = 'nokael-v2';
+const RUNTIME_CACHE = 'nokael-runtime-v2';
 
 // Assets to cache on install
 const PRECACHE_ASSETS = [

@@ -1,6 +1,6 @@
 import { useState, useEffect, Suspense, lazy } from 'react';
 import { useParams } from 'react-router-dom';
-import { supabase } from '@/src/lib/supabase';
+import { supabase, isSupabaseConfigured } from '@/src/lib/supabase';
 import { formatUAETime, isWhatsAppBrowser } from '@/src/lib/utils';
 import { Job, Step, STEP_CONFIG, VALID_STEPS } from '@/src/types';
 import { 
@@ -37,6 +37,7 @@ import {
   verifyOtpOffline, 
   queueConfirmation, 
   isOnline,
+  checkServerReachable,
   setupConnectivityListeners
 } from '@/src/lib/offline';
 import { syncPendingConfirmations, startAutoSync, stopAutoSync } from '@/src/lib/sync';
@@ -946,6 +947,11 @@ export default function ConfirmationPage() {
   const [online, setOnline] = useState(isOnline());
   const [pendingSync, setPendingSync] = useState(false);
   const [offlineVerified, setOfflineVerified] = useState(false);
+  // Distinct from `online`: true when this build has no working Supabase
+  // credentials. This is a deploy/config problem, not a connectivity one —
+  // going "offline" mode won't help, and staff should not be told to check
+  // their signal for it.
+  const [configError, setConfigError] = useState(!isSupabaseConfigured);
 
   const config = STEP_CONFIG[step];
   const myOtp = job && config ? (job[config.my_otp_field] as string) : '';
@@ -1023,9 +1029,27 @@ export default function ConfirmationPage() {
     fetchJob();
 
     const cleanup = setupConnectivityListeners(
-      () => { setOnline(true); syncPendingConfirmations().then(() => fetchJob()); },
+      // Browser says we're back online — confirm it before trusting it,
+      // since a flaky captive portal or WebView quirk can fire this event
+      // even when the server still isn't reachable.
+      () => {
+        checkServerReachable().then((reachable) => {
+          setOnline(reachable);
+          if (reachable) syncPendingConfirmations(true).then(() => fetchJob());
+        });
+      },
       () => { setOnline(false); }
     );
+
+    // navigator.onLine is known to under-report connectivity in Android
+    // WebView/Capacitor, so don't just trust the initial isOnline() read —
+    // actively verify once on mount. If it turns out we ARE reachable, this
+    // also kicks any confirmations that got stuck queued offline.
+    checkServerReachable().then((reachable) => {
+      setOnline(reachable);
+      if (reachable) syncPendingConfirmations(true).then(() => fetchJob());
+    });
+
     startAutoSync();
 
     let channel: any = null;
@@ -1086,9 +1110,29 @@ export default function ConfirmationPage() {
 
         } catch (fetchError: any) {
           if (fetchError.name === 'AbortError' || fetchError.message === 'NETWORK_ERROR') { setError('Connection Timeout: Signal too weak to reach the security server. Please refresh or move to an open area.'); setLoading(false); return; }
-          const cached = await getCachedJob(token!);
-          if (cached) { setJob(cached.job_data as Job); setOnline(false); setError(null); }
-          else setError(`Error: ${fetchError.message || 'Unable to connect to Nokael servers'}. Check your internet signal.`);
+
+          if (!isSupabaseConfigured) {
+            // Not a connectivity problem — every device on this build will
+            // fail every request no matter how good the signal is. Don't
+            // silently fall into "offline mode", say so plainly.
+            setConfigError(true);
+            setError('App Configuration Error: This app is not connected to the Nokael server (missing setup). This is not an internet issue — contact support to redeploy.');
+            setLoading(false);
+            return;
+          }
+
+          // Genuine ambiguity here: could be RLS/policy, could be network.
+          // Only fall back to offline mode if we can confirm the server is
+          // actually unreachable — otherwise we mask real server errors
+          // (e.g. permission denied) behind a misleading "you're offline".
+          const reachable = await checkServerReachable();
+          if (!reachable) {
+            const cached = await getCachedJob(token!);
+            if (cached) { setJob(cached.job_data as Job); setOnline(false); setError(null); }
+            else setError('No internet connection. Please connect to load this page for the first time.');
+          } else {
+            setError(`Server Error: ${fetchError.message || 'Unable to load this job'}. Your connection is fine — this is a server-side issue, please contact dispatch.`);
+          }
         }
       } else {
         const cached = await getCachedJob(token!);
@@ -1175,9 +1219,24 @@ export default function ConfirmationPage() {
             return;
           }
 
-          // Genuine network failure — surface it, let user retry manually
-          setOnline(false);
-          setError('Connection lost. Please check your signal and try again.');
+          if (!isSupabaseConfigured) {
+            setConfigError(true);
+            setError('App Configuration Error: This device cannot reach the Nokael server (missing setup). Re-entering the code will not help — contact support.');
+            return;
+          }
+
+          // Only demote to "offline" (and thus the local-queue path) if we
+          // can confirm the server is genuinely unreachable. Otherwise a
+          // permission/RLS/validation error gets mislabeled as "offline",
+          // the OTP gets queued locally instead of rejected with the real
+          // reason, and the step silently never completes.
+          const reachable = await checkServerReachable();
+          if (!reachable) {
+            setOnline(false);
+            setError('Connection lost. Please check your signal and try again — your code will be saved and submitted automatically once you\'re back online.');
+          } else {
+            setError(`Server Error: ${rpcError?.message || 'Could not submit confirmation'}. Your connection is fine — please contact dispatch if this persists.`);
+          }
           // No recursive retry — user taps the button again when ready
         }
       } else {
@@ -1199,6 +1258,32 @@ export default function ConfirmationPage() {
     } finally {
       setConfirming(false);
     }
+  }
+
+  // Startup self-test: if this build has no working Supabase credentials,
+  // don't even attempt the normal loading/fetch flow — every request would
+  // fail anyway, and showing the generic spinner or "check your signal"
+  // messaging would send staff chasing a signal problem that doesn't exist.
+  if (configError) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 text-center px-6">
+        <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center">
+          <AlertCircle className="w-8 h-8 text-red-500" />
+        </div>
+        <div className="space-y-2">
+          <h1 className="text-2xl font-bold text-nokael-primary">App Not Configured</h1>
+          <p className="text-nokael-text-muted text-sm max-w-md mx-auto">
+            This app can't reach the Nokael server because it was deployed without valid
+            server credentials. <strong>This is not a signal or internet problem</strong> — reloading
+            or moving to a different location will not help. Please contact support so this
+            build can be redeployed correctly.
+          </p>
+        </div>
+        <a href="https://wa.me/971509999999" className="nokael-button bg-[#059669] gap-2 flex items-center">
+          <MessageSquare className="w-5 h-5" />WhatsApp Nokael Dispatch
+        </a>
+      </div>
+    );
   }
 
   if (loading) {
@@ -1301,7 +1386,12 @@ export default function ConfirmationPage() {
           <span className="text-xl sm:text-2xl font-[900] tracking-tighter text-nokael-primary uppercase italic">NOKAEL</span>
         </div>
         <div className="flex items-center gap-2">
-          {!online && <WifiOff className="w-4 h-4 text-amber-500" />}
+          {configError && (
+            <span className="flex items-center gap-1 px-2 py-1 bg-red-50 border border-red-200 rounded-full text-[9px] font-black text-red-600 uppercase tracking-widest">
+              <AlertCircle className="w-3.5 h-3.5" /> App Not Configured
+            </span>
+          )}
+          {!configError && !online && <WifiOff className="w-4 h-4 text-amber-500" />}
           {pendingSync && <CloudOff className="w-4 h-4 text-blue-500 animate-pulse" />}
           <div className="flex items-center gap-1.5 px-3 py-1 bg-nokael-primary/10 rounded-full border border-nokael-primary/10">
              <div className="w-1.5 h-1.5 bg-nokael-primary rounded-full animate-pulse" />

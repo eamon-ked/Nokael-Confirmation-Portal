@@ -8,6 +8,7 @@ import {
   markConfirmationSynced,
   cleanupOldConfirmations,
   isOnline,
+  checkServerReachable,
 } from './offline';
 
 export interface SyncResult {
@@ -17,9 +18,12 @@ export interface SyncResult {
   errors: Array<{ id: string; error: string }>;
 }
 
-// Sync all pending confirmations
-export async function syncPendingConfirmations(): Promise<SyncResult> {
-  if (!isOnline()) {
+// Sync all pending confirmations. `skipOnlineCheck` lets callers that have
+// already verified real reachability (via checkServerReachable) bypass the
+// navigator.onLine gate below, which is known to under-report connectivity
+// in WebView/Capacitor and would otherwise block a sync we know can succeed.
+export async function syncPendingConfirmations(skipOnlineCheck: boolean = false): Promise<SyncResult> {
+  if (!skipOnlineCheck && !isOnline()) {
     console.log('[Sync] Skipping - offline');
     return { success: false, synced: 0, failed: 0, errors: [{ id: 'network', error: 'offline' }] };
   }
@@ -105,9 +109,17 @@ export function startAutoSync(intervalMs: number = 30000): void {
   console.log('[Sync] Starting auto-sync service');
 
   syncInterval = setInterval(async () => {
-    if (isOnline()) {
+    // Don't gate this on navigator.onLine alone — it's known to under-report
+    // connectivity in WebView/Capacitor, and if it's ever wrong, pending
+    // confirmations from steps 3/4 would stay queued locally forever with
+    // no other retry path. Actively verify instead.
+    const pending = await getPendingConfirmations();
+    if (pending.length === 0) return;
+
+    const reachable = isOnline() || (await checkServerReachable());
+    if (reachable) {
       try {
-        await syncPendingConfirmations();
+        await syncPendingConfirmations(true);
       } catch (err) {
         console.error('[Sync] Auto-sync error:', err);
       }

@@ -225,9 +225,39 @@ export async function cleanupOldConfirmations(): Promise<void> {
   });
 }
 
-// Check if online
+// Check if online. NOTE: navigator.onLine only tells you the device has SOME
+// network interface associated with a network (wifi/cellular radio is up).
+// It does NOT mean the internet or our server is reachable, and it is known
+// to be unreliable inside Android WebView / Capacitor (it can report false
+// even with a perfectly good connection, e.g. right after app resume).
+// Treat this as a fast, optimistic pre-check only — never as proof of
+// reachability. Use checkServerReachable() before trusting "online" for
+// anything that matters (deciding to sync, showing a config-error banner).
 export function isOnline(): boolean {
   return navigator.onLine;
+}
+
+// Actually test whether our server is reachable, with a short timeout so a
+// dead connection doesn't hang the UI. Import supabaseUrl lazily to avoid a
+// circular import with supabase.ts.
+export async function checkServerReachable(timeoutMs: number = 4000): Promise<boolean> {
+  try {
+    const { supabase, isSupabaseConfigured } = await import('./supabase');
+    if (!isSupabaseConfigured) return false; // misconfigured build, not a connectivity problem
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      // Any lightweight call works here — auth.getSession() doesn't hit the
+      // DB, it just proves we can reach the Supabase host over HTTPS.
+      await supabase.auth.getSession();
+      return true;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  } catch {
+    return false;
+  }
 }
 
 // Listen for online/offline events

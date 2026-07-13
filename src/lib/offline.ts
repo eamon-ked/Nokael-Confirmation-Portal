@@ -7,7 +7,7 @@ export interface OfflineJob {
   token: string;
   step: string;
   job_ref: string;
-  partner_otp: string;
+  partner_otp_hash: string; // bcrypt hash — never the raw code
   my_otp: string;
   job_data: any;
   cached_at: number;
@@ -62,7 +62,7 @@ export async function cacheJobData(
   token: string,
   step: string,
   jobData: any,
-  partnerOtp: string,
+  partnerOtpHash: string,
   myOtp: string
 ): Promise<void> {
   const db = await openDB();
@@ -73,7 +73,7 @@ export async function cacheJobData(
     token,
     step,
     job_ref: jobData.job_ref,
-    partner_otp: partnerOtp,
+    partner_otp_hash: partnerOtpHash,
     my_otp: myOtp,
     job_data: jobData,
     cached_at: Date.now(),
@@ -95,14 +95,16 @@ export async function getCachedJob(token: string): Promise<OfflineJob | null> {
   });
 }
 
-// Verify OTP offline (against cached partner code)
+// Verify OTP offline against the cached bcrypt hash. The real partner code
+// is never stored on the device — only a hash of it, computed server-side
+// in get_job_by_token — so a compromised device/cache never exposes it.
 export async function verifyOtpOffline(
   token: string,
   enteredOtp: string
 ): Promise<{ valid: boolean; error?: string }> {
   const cachedJob = await getCachedJob(token);
 
-  if (!cachedJob) {
+  if (!cachedJob || !cachedJob.partner_otp_hash) {
     return { valid: false, error: 'no_cached_data' };
   }
 
@@ -111,7 +113,10 @@ export async function verifyOtpOffline(
     return { valid: false, error: 'self_verification_blocked' };
   }
 
-  if (enteredOtp !== cachedJob.partner_otp) {
+  const bcrypt = await import('bcryptjs');
+  const matches = bcrypt.compareSync(enteredOtp, cachedJob.partner_otp_hash);
+
+  if (!matches) {
     return { valid: false, error: 'invalid_otp' };
   }
 

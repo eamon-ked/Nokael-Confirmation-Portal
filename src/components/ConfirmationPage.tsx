@@ -1081,8 +1081,7 @@ export default function ConfirmationPage() {
           if (!data) throw new Error('Failed to fetch job data');
 
           setJob(data as Job);
-          const partnerOtpField = getPartnerOtpField(step);
-          await cacheJobData(token!, step, data, data[partnerOtpField] as string, data[config.my_otp_field] as string);
+          await cacheJobData(token!, step, data, (data as any).partner_otp_hash as string, data[config.my_otp_field] as string);
           cacheCurrentPage().catch(err => console.warn('Page caching failed:', err));
 
         } catch (fetchError: any) {
@@ -1105,16 +1104,6 @@ export default function ConfirmationPage() {
     } finally {
       setLoading(false);
     }
-  }
-
-  function getPartnerOtpField(step: Step): keyof Job {
-    const mapping: Record<Step, keyof Job> = {
-      'client-pickup': 'otp_driver_pickup',
-      'driver-pickup': 'otp_sender',
-      'driver-delivery': 'otp_recipient',
-      'client-delivery': 'otp_driver_delivery',
-    };
-    return mapping[step];
   }
 
   async function handleReadyUpdate(field: keyof Job) {
@@ -1158,24 +1147,23 @@ export default function ConfirmationPage() {
       const lng = position?.coords.longitude ?? null;
 
       if (online) {
-        const partnerOtpField = getPartnerOtpField(step);
-        const actualPartnerOtp = job ? (job[partnerOtpField] as string) : null;
-
-        if (!actualPartnerOtp) { setError('Handover context not ready. Please refresh or wait for the other party.'); return; }
-        if (partnerOtp !== actualPartnerOtp) { setError('Incorrect code. Please double-check with the other person.'); setPartnerOtp(''); return; }
-
-        // Partner code verified — call RPC with own OTP (what the RPC expects)
+        // Verification happens entirely server-side in confirm_job_step —
+        // the client never has (and should never have) the real partner
+        // OTP to compare against locally, since get_job_by_token redacts
+        // it. We just submit the code the user typed in.
         try {
           const { data, error: rpcError } = await supabase.rpc('confirm_job_step', {
             p_token: token,
             p_step: config.rpc_step,
-            p_otp: myOtp,
+            p_otp: partnerOtp,
             p_lat: lat,
             p_lng: lng
           });
 
           if (rpcError) throw rpcError;
-          if (data?.error) setError(data.error);
+          if (data?.error === 'locked') { setIsLocked(true); }
+          else if (data?.error === 'invalid_otp') { setError('Incorrect code. Please double-check with the other person.'); setPartnerOtp(''); }
+          else if (data?.error) setError(data.error);
           else await fetchJob();
 
         } catch (rpcError: any) {

@@ -183,7 +183,7 @@ function CourierView({ job, step, online, handleReadyUpdate, partnerOtp, setPart
   const isPickup = step === 'driver-pickup';
 
   // Guard: prevent submission before the client has confirmed their side
-  const prereqMet = isPickup ? !!job.client_pickup_at : !!job.client_delivery_at;
+  const prereqMet = isPickup ? !!job.client_pickup_at : !!job.driver_pickup_at;
   
   const handleNavigationLaunch = () => {
     const lat = isPickup ? job.pickup_lat : job.delivery_lat;
@@ -819,6 +819,22 @@ function StepCompletedView({ job, step, config }: { job: Job; step: Step; config
           </div>
         </div>
 
+        {/* Live Driver Tracking Map (Only if in transit) */}
+        {(job.status === 'driver_pickup' || job.status === 'driver_delivery') && (
+          <div className="space-y-4 animate-in fade-in duration-700">
+            <div className="flex items-center justify-between px-1">
+              <div>
+                <span className="text-[9px] font-black uppercase tracking-[0.25em] text-nokael-primary/30">Live Dispatch Map</span>
+                <p className="text-sm font-black text-nokael-primary uppercase tracking-tight mt-0.5">Track Courier Progress</p>
+              </div>
+              <div className="px-3 py-1 bg-nokael-accent/10 border border-nokael-accent/15 rounded-full text-[9px] font-black uppercase tracking-widest text-nokael-accent animate-pulse">
+                Live GPS Uplink
+              </div>
+            </div>
+            <DriverMap job={job} />
+          </div>
+        )}
+
         {/* Auto-update notice */}
         <div className="flex items-center justify-center gap-2.5 py-3 text-nokael-primary/30">
           <div className="w-1.5 h-1.5 bg-nokael-primary/30 rounded-full animate-pulse" />
@@ -958,7 +974,7 @@ export default function ConfirmationPage() {
 
     const updateLocation = async (lat: number, lng: number) => {
       try {
-        await supabase.from('jobs').update({ driver_lat: lat, driver_lng: lng, updated_at: new Date().toISOString() }).eq(config.token_field, token);
+        await supabase.rpc('update_job_by_token', { p_token: token, p_updates: { driver_lat: lat, driver_lng: lng } });
         if (step === 'driver-delivery' && !job.driver_arrived_delivery_at) {
           const distToTarget = calculateDistance(lat, lng, job.drop_lat || 0, job.drop_lng || 0);
           if (distToTarget < 500) handleReadyUpdate('driver_arrived_delivery_at');
@@ -1033,7 +1049,7 @@ export default function ConfirmationPage() {
 
     const interval = setInterval(() => {
       if (isOnline() && !confirming) {
-        supabase.from('jobs').select('*').eq(config.token_field, token).single()
+        supabase.rpc('get_job_by_token', { p_token: token }).single()
           .then(
             ({ data }) => { if (data) setJob(data as Job); },
             (err) => console.debug('Quiet poll failed:', err)
@@ -1054,7 +1070,7 @@ export default function ConfirmationPage() {
         try {
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 10000);
-          const { data, error: supabaseError } = await supabase.from('jobs').select('*').eq(config.token_field, token).abortSignal(controller.signal).single();
+          const { data, error: supabaseError } = await supabase.rpc('get_job_by_token', { p_token: token }).abortSignal(controller.signal).single();
           clearTimeout(timeoutId);
 
           if (supabaseError) {
@@ -1106,7 +1122,7 @@ export default function ConfirmationPage() {
     setConfirming(true);
     setError(null);
     try {
-      const { error: updateError } = await supabase.from('jobs').update({ [field]: new Date().toISOString() }).eq(config.token_field, token);
+      const { error: updateError } = await supabase.rpc('update_job_by_token', { p_token: token, p_updates: { [field]: new Date().toISOString() } });
       if (updateError) {
         const msg = updateError.message || '';
         if (msg.includes('column') && msg.includes('does not exist')) setError('Database Mismatch: Missing readiness columns. Contact support.');

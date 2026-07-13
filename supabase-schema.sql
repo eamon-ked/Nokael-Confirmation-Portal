@@ -231,25 +231,114 @@ BEGIN
     END LOOP;
 END $$;
 
--- Policy: Allow clients / drivers / recipients to fetch/read jobs
-CREATE POLICY "Allow public select of jobs" 
-ON public.jobs 
-FOR SELECT 
-TO anon, authenticated 
-USING (true);
-
--- Policy: Allow clients & drivers to update relevant fields of jobs
-CREATE POLICY "Allow public update of active jobs" 
-ON public.jobs 
-FOR UPDATE 
-TO anon, authenticated
-USING (status != 'completed')
-WITH CHECK (status != 'completed');
-
--- Policy: Allow drivers list querying for telemetry verification
+-- Drop the permissive select/update policies to default-deny access
+DROP POLICY IF EXISTS "Allow public select of jobs" ON public.jobs;
+DROP POLICY IF EXISTS "Allow public update of active jobs" ON public.jobs;
 DROP POLICY IF EXISTS "Allow public select of drivers" ON public.drivers;
-CREATE POLICY "Allow public select of drivers"
-ON public.drivers
-FOR SELECT
-TO anon, authenticated
-USING (true);
+
+-- Create secure SECURITY DEFINER RPC functions for token-gated operations
+
+-- 1. Secure Fetch Function
+CREATE OR REPLACE FUNCTION public.get_job_by_token(p_token text)
+RETURNS SETOF public.jobs
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_job public.jobs%ROWTYPE;
+BEGIN
+  -- Fetch the job matching any of the tracking or step tokens
+  SELECT * INTO v_job FROM public.jobs
+  WHERE token_client_pickup::text = p_token
+     OR token_driver_pickup::text = p_token
+     OR token_driver_delivery::text = p_token
+     OR token_client_delivery::text = p_token
+     OR tracking_token = p_token;
+
+  IF NOT FOUND THEN
+    RETURN;
+  END IF;
+
+  -- Redact OTPs based on which token was used to access the job.
+  -- Only return the specific OTP the caller owns so they cannot see/spoof other party's OTPs.
+  IF v_job.token_client_pickup::text = p_token THEN
+    -- Sender owns otp_sender, should see it to show to driver.
+    v_job.otp_driver_pickup := NULL;
+    v_job.otp_driver_delivery := NULL;
+    v_job.otp_recipient := NULL;
+  ELSIF v_job.token_driver_pickup::text = p_token THEN
+    -- Driver pickup owns otp_driver_pickup.
+    v_job.otp_sender := NULL;
+    v_job.otp_driver_delivery := NULL;
+    v_job.otp_recipient := NULL;
+  ELSIF v_job.token_driver_delivery::text = p_token THEN
+    -- Driver delivery owns otp_driver_delivery.
+    v_job.otp_sender := NULL;
+    v_job.otp_driver_pickup := NULL;
+    v_job.otp_recipient := NULL;
+  ELSIF v_job.token_client_delivery::text = p_token THEN
+    -- Recipient owns otp_recipient.
+    v_job.otp_sender := NULL;
+    v_job.otp_driver_pickup := NULL;
+    v_job.otp_driver_delivery := NULL;
+  ELSE
+    -- Generic tracking_token sees no OTPs.
+    v_job.otp_sender := NULL;
+    v_job.otp_driver_pickup := NULL;
+    v_job.otp_driver_delivery := NULL;
+    v_job.otp_recipient := NULL;
+  END IF;
+
+  RETURN NEXT v_job;
+END;
+$$;
+
+-- 2. Secure Update Function
+CREATE OR REPLACE FUNCTION public.update_job_by_token(p_token text, p_updates jsonb)
+RETURNS SETOF public.jobs
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_job public.jobs%ROWTYPE;
+BEGIN
+  -- Verify token and fetch the active job (not completed/cancelled)
+  SELECT * INTO v_job FROM public.jobs
+  WHERE (token_client_pickup::text = p_token
+     OR token_driver_pickup::text = p_token
+     OR token_driver_delivery::text = p_token
+     OR token_client_delivery::text = p_token)
+    AND status != 'completed'
+    AND status != 'cancelled';
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Job not found, already completed, or access token invalid.';
+  END IF;
+
+  -- Selectively update white-listed telemetry & readiness fields
+  IF p_updates ? 'driver_lat' THEN
+    UPDATE public.jobs SET driver_lat = (p_updates->>'driver_lat')::double precision, driver_updated_at = now(), updated_at = now() WHERE id = v_job.id;
+  END IF;
+  IF p_updates ? 'driver_lng' THEN
+    UPDATE public.jobs SET driver_lng = (p_updates->>'driver_lng')::double precision, driver_updated_at = now(), updated_at = now() WHERE id = v_job.id;
+  END IF;
+  IF p_updates ? 'driver_arrived_pickup_at' THEN
+    UPDATE public.jobs SET driver_arrived_pickup_at = (p_updates->>'driver_arrived_pickup_at')::timestamp with time zone, updated_at = now() WHERE id = v_job.id;
+  END IF;
+  IF p_updates ? 'sender_ready_at' THEN
+    UPDATE public.jobs SET sender_ready_at = (p_updates->>'sender_ready_at')::timestamp with time zone, updated_at = now() WHERE id = v_job.id;
+  END IF;
+  IF p_updates ? 'driver_arrived_delivery_at' THEN
+    UPDATE public.jobs SET driver_arrived_delivery_at = (p_updates->>'driver_arrived_delivery_at')::timestamp with time zone, updated_at = now() WHERE id = v_job.id;
+  END IF;
+
+  -- Return the updated, sanitized job record
+  RETURN QUERY SELECT * FROM public.get_job_by_token(p_token);
+END;
+$$;
+
+-- Grant EXECUTE permission on these secure RPC functions to anon and authenticated roles
+GRANT EXECUTE ON FUNCTION public.get_job_by_token(text) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.update_job_by_token(text, jsonb) TO anon, authenticated;

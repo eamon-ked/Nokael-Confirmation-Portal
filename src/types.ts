@@ -35,6 +35,8 @@ export interface Job {
   otp_driver_pickup?: string;
   otp_driver_delivery?: string;
   otp_recipient?: string;
+  token_driver_pickup?: string;
+  token_driver_delivery?: string;
 }
 
 export type Step = 'client-pickup' | 'driver-pickup' | 'driver-delivery' | 'client-delivery';

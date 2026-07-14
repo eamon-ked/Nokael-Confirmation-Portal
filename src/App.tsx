@@ -1,11 +1,15 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import ConfirmationPage from './components/ConfirmationPage';
+import DriverHub from './components/DriverHub';
 
 export default function App() {
   return (
     <BrowserRouter>
       <div className="min-h-screen bg-nokael-bg selection:bg-nokael-neon selection:text-black">
         <Routes>
+          {/* Driver Hub — single link, both pickup + delivery for one job */}
+          <Route path="/:token/driver-hub" element={<DriverHub />} />
+
           {/* Main Confirmation Route */}
           <Route path="/:token/:step" element={<ConfirmationPage />} />
           

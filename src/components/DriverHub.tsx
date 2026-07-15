@@ -4,6 +4,7 @@ import { supabase, isSupabaseConfigured } from '@/src/lib/supabase';
 import { cacheJobData, getCachedJob, isOnline, checkServerReachable, setupConnectivityListeners } from '@/src/lib/offline';
 import { Job, STEP_CONFIG } from '@/src/types';
 import { DISPATCH_WA_URL } from '@/src/lib/constants';
+import PWAInstallPrompt from './PWAInstallPrompt';
 import {
   AlertCircle,
   CheckCircle2,
@@ -301,6 +302,8 @@ export default function DriverHub() {
           </div>
         </div>
       </header>
+
+      <PWAInstallPrompt />
 
       <main className="flex-1 space-y-6">
         {/* Quick-jump navigation between Collection and Delivery */}

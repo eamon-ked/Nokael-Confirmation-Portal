@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { supabase, isSupabaseConfigured } from '@/src/lib/supabase';
 import { DISPATCH_WA_URL } from '@/src/lib/constants';
 import { scopeInstallToStartUrl } from '@/src/lib/pwa';
+import PWAInstallPrompt from './PWAInstallPrompt';
 import {
   AlertCircle,
   CheckCircle2,
@@ -256,6 +257,8 @@ export default function DriverStatusPage() {
         <h1 className="text-[20px] font-semibold text-nokael-primary tracking-tight">Hi {info.full_name.split(' ')[0]}</h1>
         {info.tier && <p className="text-nokael-text-muted text-[13px]">Tier {info.tier} Driver</p>}
       </header>
+
+      <PWAInstallPrompt />
 
       <div className="flex-1 flex flex-col items-center justify-center gap-6">
         {isOnJob ? (

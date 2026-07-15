@@ -1,5 +1,5 @@
 import { useState, useEffect, Suspense, lazy } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { supabase, isSupabaseConfigured } from '@/src/lib/supabase';
 import { formatUAETime, isWhatsAppBrowser } from '@/src/lib/utils';
 import { Job, Step, STEP_CONFIG, VALID_STEPS } from '@/src/types';
@@ -7,6 +7,7 @@ import { DISPATCH_WA_URL } from '@/src/lib/constants';
 import { 
   AlertCircle, 
   CheckCircle2, 
+  ChevronLeft,
   Clock, 
   MessageSquare, 
   Loader2, 
@@ -669,6 +670,7 @@ function JobSummary({ job }: { job: Job }) {
 }
 
 function StepCompletedView({ job, step, config }: { job: Job; step: Step; config: any }) {
+  const { token } = useParams<{ token: string }>();
   const isPickup = step === 'client-pickup' || step === 'driver-pickup';
 
   const getCustodian = () => {
@@ -757,6 +759,17 @@ function StepCompletedView({ job, step, config }: { job: Job; step: Step; config
             </div>
           )}
         </div>
+
+        {/* Back to Job Hub button for drivers */}
+        {(step === 'driver-pickup' || step === 'driver-delivery') && (
+          <Link
+            to={`/${token}/driver-hub`}
+            className="w-full bg-slate-900 text-white font-bold p-5 rounded-[24px] uppercase tracking-wider flex items-center justify-center gap-3 hover:bg-slate-800 transition-all shadow-lg active:scale-[0.98]"
+          >
+            <ChevronLeft className="w-5 h-5 text-white" />
+            <span className="text-sm">Back to Job Hub</span>
+          </Link>
+        )}
 
         {/* Live Possession Tracker */}
         <div className="nokael-card !p-0 overflow-hidden border-nokael-border shadow-xl bg-white">
@@ -1383,8 +1396,20 @@ export default function ConfirmationPage() {
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-8 min-h-screen flex flex-col">
       <header className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <img src="/nokael-logo.jpg" alt="Nokael" className="h-7 sm:h-8 rounded-md border border-slate-800" referrerPolicy="no-referrer" onError={(e) => (e.currentTarget.style.display = 'none')} />
-          <span className="text-xl sm:text-2xl font-[900] tracking-tighter text-nokael-primary uppercase italic">NOKAEL</span>
+          {(step === 'driver-pickup' || step === 'driver-delivery') ? (
+            <Link 
+              to={`/${token}/driver-hub`} 
+              className="flex items-center gap-1.5 text-nokael-primary/60 hover:text-nokael-primary transition-all font-medium text-[13px] bg-white px-3 py-1.5 rounded-full border border-nokael-border shadow-sm hover:shadow active:scale-95"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+              <span>Job Hub</span>
+            </Link>
+          ) : (
+            <>
+              <img src="/nokael-logo.jpg" alt="Nokael" className="h-7 sm:h-8 rounded-md border border-slate-800" referrerPolicy="no-referrer" onError={(e) => (e.currentTarget.style.display = 'none')} />
+              <span className="text-xl sm:text-2xl font-[900] tracking-tighter text-nokael-primary uppercase italic">NOKAEL</span>
+            </>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {configError && (

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import ConfirmationPage from './components/ConfirmationPage';
 import DriverHub from './components/DriverHub';
+import DriverStatusPage from './components/DriverStatusPage';
 
 export default function App() {
   return (
@@ -9,6 +10,9 @@ export default function App() {
         <Routes>
           {/* Driver Hub — single link, both pickup + delivery for one job */}
           <Route path="/:token/driver-hub" element={<DriverHub />} />
+
+          {/* Driver Status — persistent per-driver link to toggle availability */}
+          <Route path="/driver/:driverId/status" element={<DriverStatusPage />} />
 
           {/* Main Confirmation Route */}
           <Route path="/:token/:step" element={<ConfirmationPage />} />

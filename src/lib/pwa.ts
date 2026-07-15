@@ -5,7 +5,7 @@
 export function scopeInstallToStartUrl(startUrl: string, name: string) {
   try {
     const baseManifest = {
-      id: "/",
+      id: startUrl,
       name: name,
       short_name: name.split(" ")[0] || "Nokael",
       description: "Nokael chain-of-custody driver app — jobs, status, and confirmations.",

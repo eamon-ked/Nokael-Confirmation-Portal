@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { supabase, isSupabaseConfigured } from '@/src/lib/supabase';
 import { DISPATCH_WA_URL } from '@/src/lib/constants';
 import { scopeInstallToStartUrl } from '@/src/lib/pwa';
-import PWAInstallPrompt from './PWAInstallPrompt';
+
 import {
   AlertCircle,
   CheckCircle2,
@@ -15,6 +15,8 @@ import {
   Moon,
   Package,
   Sun,
+  Copy,
+  Share2,
 } from 'lucide-react';
 
 // Matches the font stack used on DriverHub so both driver-facing screens feel
@@ -64,6 +66,13 @@ export default function DriverStatusPage() {
 
   const [jobs, setJobs] = useState<ActiveJob[]>([]);
   const [jobsLoading, setJobsLoading] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(window.location.href);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2000);
+  };
 
   const loggedIn = Boolean(driverId && localStorage.getItem(SESSION_KEY_PREFIX + driverId));
 
@@ -258,7 +267,7 @@ export default function DriverStatusPage() {
         {info.tier && <p className="text-nokael-text-muted text-[13px]">Tier {info.tier} Driver</p>}
       </header>
 
-      <PWAInstallPrompt />
+
 
       <div className="flex-1 flex flex-col items-center justify-center gap-6">
         {isOnJob ? (
@@ -294,6 +303,42 @@ export default function DriverStatusPage() {
           </>
         )}
         {error && <p className="text-red-500 text-[13px] text-center">{error}</p>}
+      </div>
+
+      {/* Persistent Portal Link Card for PWA / Bookmark */}
+      <div className="nokael-card !p-4 border border-nokael-border space-y-3 bg-white">
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] uppercase text-nokael-text-muted tracking-wider font-bold">Your Portal Link</span>
+          <span className="px-2 py-0.5 bg-slate-900 text-white text-[9px] font-black rounded tracking-widest uppercase">PWA READY</span>
+        </div>
+        <p className="text-[12px] text-nokael-text-muted leading-relaxed">
+          This is your unique driver link. Open this specific link in Chrome or Safari to install the Nokael Driver app to your home screen.
+        </p>
+        <div className="flex gap-2">
+          <button
+            onClick={handleCopyLink}
+            className="flex-1 bg-slate-900 text-white hover:bg-slate-800 font-bold text-[11px] uppercase tracking-wider py-2.5 px-3 rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] shadow"
+          >
+            <Copy className="w-3.5 h-3.5" />
+            <span>{copiedLink ? 'Copied!' : 'Copy Link'}</span>
+          </button>
+          <button
+            onClick={() => {
+              if (navigator.share) {
+                navigator.share({
+                  title: 'Nokael Driver Portal',
+                  url: window.location.href
+                }).catch(() => {});
+              } else {
+                handleCopyLink();
+              }
+            }}
+            className="flex-1 bg-white border border-nokael-border text-nokael-primary hover:bg-slate-50 font-bold text-[11px] uppercase tracking-wider py-2.5 px-3 rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] shadow-sm"
+          >
+            <Share2 className="w-3.5 h-3.5" />
+            <span>Share</span>
+          </button>
+        </div>
       </div>
 
       <div className="space-y-3 pb-4">

@@ -4,7 +4,7 @@ import { supabase, isSupabaseConfigured } from '@/src/lib/supabase';
 import { cacheJobData, getCachedJob, isOnline, checkServerReachable, setupConnectivityListeners } from '@/src/lib/offline';
 import { Job, STEP_CONFIG } from '@/src/types';
 import { DISPATCH_WA_URL } from '@/src/lib/constants';
-import PWAInstallPrompt from './PWAInstallPrompt';
+import { scopeInstallToStartUrl } from '@/src/lib/pwa';
 import {
   AlertCircle,
   CheckCircle2,
@@ -210,6 +210,13 @@ export default function DriverHub() {
     return () => { cleanup(); clearInterval(interval); };
   }, [token, fetchJob]);
 
+  useEffect(() => {
+    const cachedDriverId = localStorage.getItem('nokael_active_driver_id');
+    if (cachedDriverId) {
+      scopeInstallToStartUrl(`/driver/${cachedDriverId}/status`, 'Nokael Driver');
+    }
+  }, []);
+
   if (configError) {
     return (
       <div style={{ fontFamily: APPLE_FONT_STACK }} className="flex flex-col items-center justify-center min-h-[60vh] gap-6 text-center px-6">
@@ -303,7 +310,7 @@ export default function DriverHub() {
         </div>
       </header>
 
-      <PWAInstallPrompt />
+
 
       <main className="flex-1 space-y-6">
         {/* Quick-jump navigation between Collection and Delivery */}

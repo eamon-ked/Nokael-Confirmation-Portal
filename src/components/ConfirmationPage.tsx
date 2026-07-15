@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { supabase, isSupabaseConfigured } from '@/src/lib/supabase';
 import { formatUAETime, isWhatsAppBrowser } from '@/src/lib/utils';
 import { Job, Step, STEP_CONFIG, VALID_STEPS } from '@/src/types';
+import { DISPATCH_WA_URL } from '@/src/lib/constants';
 import { 
   AlertCircle, 
   CheckCircle2, 
@@ -1279,7 +1280,7 @@ export default function ConfirmationPage() {
             build can be redeployed correctly.
           </p>
         </div>
-        <a href="https://wa.me/971509999999" className="nokael-button bg-[#059669] gap-2 flex items-center">
+        <a href={DISPATCH_WA_URL} className="nokael-button bg-[#059669] gap-2 flex items-center">
           <MessageSquare className="w-5 h-5" />WhatsApp Nokael Dispatch
         </a>
       </div>
@@ -1305,7 +1306,7 @@ export default function ConfirmationPage() {
           <h1 className="text-2xl font-black text-nokael-primary uppercase tracking-tighter italic">SECURITY LOCKOUT</h1>
           <p className="text-nokael-text-muted text-sm leading-relaxed max-w-[300px]">Too many incorrect secure code attempts. For safety, this job has been locked. Please contact our operations team to verify and reset.</p>
         </div>
-        <a href="https://wa.me/971509999999" className="nokael-button bg-[#059669] gap-2 flex items-center">
+        <a href={DISPATCH_WA_URL} className="nokael-button bg-[#059669] gap-2 flex items-center">
           <MessageSquare className="w-5 h-5" />WhatsApp Nokael Dispatch
         </a>
       </div>
@@ -1322,7 +1323,7 @@ export default function ConfirmationPage() {
           <h1 className="text-2xl font-bold text-nokael-primary">{error ? 'Unable to Load Job' : 'Invalid Link'}</h1>
           <p className="text-nokael-text-muted text-sm max-w-md mx-auto">{error || 'This link is not valid or has expired.'}</p>
         </div>
-        <a href="https://wa.me/971509999999" className="text-nokael-accent font-bold text-sm underline underline-offset-4">Contact Nokael Dispatch</a>
+        <a href={DISPATCH_WA_URL} className="text-nokael-accent font-bold text-sm underline underline-offset-4">Contact Nokael Dispatch</a>
       </div>
     );
   }
@@ -1405,7 +1406,7 @@ export default function ConfirmationPage() {
       <footer className="pt-12 mt-12 border-t border-nokael-border space-y-8 pb-12">
         <LogisticsDetail job={job!} />
         <div>
-          <a href="https://wa.me/971509999999" className="w-full bg-white border-2 border-nokael-border p-6 rounded-[32px] text-nokael-primary font-black no-underline flex items-center justify-center gap-4 hover:bg-slate-50 transition-all">
+          <a href={DISPATCH_WA_URL} className="w-full bg-white border-2 border-nokael-border p-6 rounded-[32px] text-nokael-primary font-black no-underline flex items-center justify-center gap-4 hover:bg-slate-50 transition-all">
             <MessageSquare className="w-6 h-6" />
             <span className="text-sm uppercase tracking-wider">Contact Response Team</span>
           </a>

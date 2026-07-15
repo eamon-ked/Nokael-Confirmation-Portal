@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase, isSupabaseConfigured } from '@/src/lib/supabase';
 import { cacheJobData, getCachedJob, isOnline, checkServerReachable, setupConnectivityListeners } from '@/src/lib/offline';
 import { Job, STEP_CONFIG } from '@/src/types';
+import { DISPATCH_WA_URL } from '@/src/lib/constants';
 import {
   AlertCircle,
   CheckCircle2,
@@ -220,7 +221,7 @@ export default function DriverHub() {
             server credentials. Please contact support so this build can be redeployed correctly.
           </p>
         </div>
-        <a href="https://wa.me/971509999999" className="nokael-button bg-[#059669] gap-2 flex items-center">
+        <a href={DISPATCH_WA_URL} className="nokael-button bg-[#059669] gap-2 flex items-center">
           <MessageSquare className="w-5 h-5" />WhatsApp Nokael Dispatch
         </a>
       </div>
@@ -246,7 +247,7 @@ export default function DriverHub() {
           <h1 className="text-[20px] font-semibold text-nokael-primary">Unable to Load Job</h1>
           <p className="text-nokael-text-muted text-[14px] max-w-md mx-auto">{error || 'This link is not valid or has expired.'}</p>
         </div>
-        <a href="https://wa.me/971509999999" className="text-nokael-accent font-medium text-[14px] underline underline-offset-4">Contact Nokael Dispatch</a>
+        <a href={DISPATCH_WA_URL} className="text-nokael-accent font-medium text-[14px] underline underline-offset-4">Contact Nokael Dispatch</a>
       </div>
     );
   }
@@ -350,7 +351,7 @@ export default function DriverHub() {
       </main>
 
       <footer className="pt-6 mt-6 border-t border-nokael-border pb-10">
-        <a href="https://wa.me/971509999999" className="w-full bg-white border border-nokael-border p-4 rounded-2xl text-nokael-primary font-medium no-underline flex items-center justify-center gap-3 hover:bg-slate-50 transition-all">
+        <a href={DISPATCH_WA_URL} className="w-full bg-white border border-nokael-border p-4 rounded-2xl text-nokael-primary font-medium no-underline flex items-center justify-center gap-3 hover:bg-slate-50 transition-all">
           <MessageSquare className="w-5 h-5" />
           <span className="text-[14px]">Contact Response Team</span>
         </a>

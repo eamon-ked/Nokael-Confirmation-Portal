@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, type FormEvent } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase, isSupabaseConfigured } from '@/src/lib/supabase';
+import { DISPATCH_WA_URL } from '@/src/lib/constants';
 import {
   AlertCircle,
   CheckCircle2,
@@ -226,7 +227,7 @@ export default function DriverStatusPage() {
           </button>
         </form>
 
-        <a href="https://wa.me/971509999999" className="text-nokael-accent font-medium text-[13px] text-center underline underline-offset-4">
+        <a href={DISPATCH_WA_URL} className="text-nokael-accent font-medium text-[13px] text-center underline underline-offset-4">
           Don't have a PIN? Contact dispatch
         </a>
       </div>
@@ -321,7 +322,7 @@ export default function DriverStatusPage() {
       </div>
 
       <footer className="pb-6">
-        <a href="https://wa.me/971509999999" className="w-full bg-white border border-nokael-border p-4 rounded-2xl text-nokael-primary font-medium no-underline flex items-center justify-center gap-3 hover:bg-slate-50 transition-all">
+        <a href={DISPATCH_WA_URL} className="w-full bg-white border border-nokael-border p-4 rounded-2xl text-nokael-primary font-medium no-underline flex items-center justify-center gap-3 hover:bg-slate-50 transition-all">
           <MessageSquare className="w-5 h-5" />
           <span className="text-[14px]">Contact Dispatch</span>
         </a>

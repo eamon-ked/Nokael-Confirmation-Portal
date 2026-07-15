@@ -3,7 +3,14 @@ import { useParams, Link } from 'react-router-dom';
 import { supabase, isSupabaseConfigured } from '@/src/lib/supabase';
 import { formatUAETime, isWhatsAppBrowser } from '@/src/lib/utils';
 import { Job, Step, STEP_CONFIG, VALID_STEPS } from '@/src/types';
-import { DISPATCH_WA_URL } from '@/src/lib/constants';
+import { DISPATCH_WA_URL, WHATSAPP_NUMBER } from '@/src/lib/constants';
+
+const getContactPhone = (phone: string | null | undefined) => {
+  const p = phone || WHATSAPP_NUMBER;
+  if (!p) return '';
+  return p.startsWith('+') ? p : `+${p}`;
+};
+
 import { 
   AlertCircle, 
   CheckCircle2, 
@@ -132,7 +139,7 @@ function SenderView({ job, step, config, online, handleReadyUpdate, handleReveal
              <span className="px-2 py-0.5 bg-nokael-success text-white text-[8px] font-black rounded tracking-widest uppercase shadow-sm">Verified</span>
           </div>
         </div>
-        <a href={`tel:${job.driver_phone || ''}`} className="w-12 h-12 bg-slate-900 rounded-full flex items-center justify-center text-white hover:bg-nokael-primary transition-all active:scale-95 shadow-lg">
+        <a href={`tel:${getContactPhone(job.driver_phone)}`} className="w-12 h-12 bg-slate-900 rounded-full flex items-center justify-center text-white hover:bg-nokael-primary transition-all active:scale-95 shadow-lg">
           <Phone className="w-5 h-5 fill-white" />
         </a>
       </div>
@@ -531,7 +538,7 @@ function RecipientView({ job, step, config, online, handleReadyUpdate, handleRev
          </div>
        )}
        <div className="grid grid-cols-2 gap-4">
-          <a href={`tel:${job.driver_phone || ''}`} className="h-20 bg-slate-900 border-2 border-slate-900 text-white font-black rounded-[28px] flex items-center justify-center gap-3 shadow-xl transition-all active:scale-[0.98]">
+          <a href={`tel:${getContactPhone(job.driver_phone)}`} className="h-20 bg-slate-900 border-2 border-slate-900 text-white font-black rounded-[28px] flex items-center justify-center gap-3 shadow-xl transition-all active:scale-[0.98]">
              <Phone className="w-6 h-6" />
              <span className="text-[10px] uppercase tracking-widest">Call Courier</span>
           </a>
@@ -695,7 +702,7 @@ function StepCompletedView({ job, step, config }: { job: Job; step: Step; config
       return {
         role: 'Nokael Courier',
         name: 'Certified Courier Team',
-        phone: job.driver_phone || null,
+        phone: job.driver_phone || WHATSAPP_NUMBER,
         statusLabel: 'In Transit',
         statusColor: 'text-blue-700 bg-blue-50 border-blue-200',
         dotColor: 'bg-blue-500',

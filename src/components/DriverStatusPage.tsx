@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, type FormEvent } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { supabase, isSupabaseConfigured } from '@/src/lib/supabase';
 import { DISPATCH_WA_URL } from '@/src/lib/constants';
+import { scopeInstallToStartUrl } from '@/src/lib/pwa';
 import {
   AlertCircle,
   CheckCircle2,
@@ -21,6 +22,11 @@ const APPLE_FONT_STACK =
   "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', system-ui, 'Segoe UI', Roboto, sans-serif";
 
 const SESSION_KEY_PREFIX = 'nokael_driver_session_';
+
+// Shared with DriverHub — lets a job-hub screen show a "My Jobs" link back
+// to whichever driver most recently had a valid session on this device,
+// without needing a server round trip.
+export const ACTIVE_DRIVER_KEY = 'nokael_active_driver_id';
 
 type DriverSessionInfo = {
   full_name: string;
@@ -80,6 +86,12 @@ export default function DriverStatusPage() {
       // still good — if it says no, drop the local flag so the PIN pad shows.
       if (!result.session_valid && driverId) {
         localStorage.removeItem(SESSION_KEY_PREFIX + driverId);
+      }
+      if (result.session_valid && driverId) {
+        localStorage.setItem(ACTIVE_DRIVER_KEY, driverId);
+        // So "Add to Home Screen" from here relaunches straight back into
+        // this driver's own status page instead of the generic root.
+        scopeInstallToStartUrl(`/driver/${driverId}/status`, `Nokael — ${result.full_name.split(' ')[0]}`);
       }
       setError(null);
     } catch (err) {
@@ -294,9 +306,9 @@ export default function DriverStatusPage() {
           <p className="text-nokael-text-muted text-[13px] px-1">No active jobs right now.</p>
         )}
         {jobs.map((job) => (
-          <a
+          <Link
             key={job.job_ref}
-            href={`/${job.hub_token}/driver-hub`}
+            to={`/${job.hub_token}/driver-hub`}
             className="nokael-card !p-4 flex items-center gap-3 no-underline hover:bg-slate-50 transition-all"
           >
             <div className="w-10 h-10 rounded-full bg-slate-900 flex items-center justify-center shrink-0">
@@ -317,7 +329,7 @@ export default function DriverStatusPage() {
               </p>
             </div>
             <ChevronRight className="w-4 h-4 text-nokael-primary/25 shrink-0" />
-          </a>
+          </Link>
         ))}
       </div>
 

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { supabase, isSupabaseConfigured } from '@/src/lib/supabase';
 import { cacheJobData, getCachedJob, isOnline, checkServerReachable, setupConnectivityListeners } from '@/src/lib/offline';
 import { Job, STEP_CONFIG } from '@/src/types';
@@ -7,6 +7,7 @@ import { DISPATCH_WA_URL } from '@/src/lib/constants';
 import {
   AlertCircle,
   CheckCircle2,
+  ChevronLeft,
   ChevronRight,
   Clock,
   Loader2,
@@ -273,13 +274,25 @@ export default function DriverHub() {
     navigate(`/${job.token_driver_delivery}/driver-delivery`);
   };
 
+  const cachedDriverId = localStorage.getItem('nokael_active_driver_id');
+
   return (
     <div style={{ fontFamily: APPLE_FONT_STACK }} className="max-w-2xl mx-auto px-4 sm:px-6 py-5 sm:py-8 space-y-6 min-h-screen flex flex-col">
       <header className="flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <img src="/nokael-logo.jpg" alt="Nokael" className="h-6 sm:h-7 rounded-md border border-slate-800" referrerPolicy="no-referrer" onError={(e) => (e.currentTarget.style.display = 'none')} />
-          <span className="text-[15px] font-semibold tracking-tight text-nokael-primary">Nokael</span>
-        </div>
+        {cachedDriverId ? (
+          <Link
+            to={`/driver/${cachedDriverId}/status`}
+            className="flex items-center gap-1.5 text-nokael-primary/60 hover:text-nokael-primary transition-all font-medium text-[13px] bg-white px-3 py-1.5 rounded-full border border-nokael-border shadow-sm"
+          >
+            <ChevronLeft className="w-3.5 h-3.5" />
+            <span>My Jobs</span>
+          </Link>
+        ) : (
+          <div className="flex items-center gap-2.5">
+            <img src="/nokael-logo.jpg" alt="Nokael" className="h-6 sm:h-7 rounded-md border border-slate-800" referrerPolicy="no-referrer" onError={(e) => (e.currentTarget.style.display = 'none')} />
+            <span className="text-[15px] font-semibold tracking-tight text-nokael-primary">Nokael</span>
+          </div>
+        )}
         <div className="flex items-center gap-2">
           {!online && <WifiOff className="w-3.5 h-3.5 text-amber-500" />}
           <div className="flex items-center gap-1.5 px-2.5 py-1 bg-nokael-primary/10 rounded-full">

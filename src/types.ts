@@ -35,6 +35,12 @@ export interface Job {
   otp_driver_pickup?: string;
   otp_driver_delivery?: string;
   otp_recipient?: string;
+  // Returned by get_job_by_token as a single field scoped to whichever
+  // token was presented — replaces the four otp_* fields above as the
+  // client-facing source of "my code". The otp_* fields stay in this
+  // interface for now since nothing else reads them, but the RPC no
+  // longer returns them.
+  otp_own?: string;
   token_driver_pickup?: string;
   token_driver_delivery?: string;
 }
@@ -60,7 +66,7 @@ export const STEP_CONFIG: Record<Step, {
     token_field: 'token_client_pickup',
     at_field: 'client_pickup_at',
     partner_at_field: 'driver_pickup_at',
-    my_otp_field: 'otp_sender',
+    my_otp_field: 'otp_own',
     rpc_step: 'client_pickup',
     prerequisite_status: 'pending',
     button_text: 'Verify Handover',
@@ -73,7 +79,7 @@ export const STEP_CONFIG: Record<Step, {
     token_field: 'token_driver_pickup',
     at_field: 'driver_pickup_at',
     partner_at_field: 'client_pickup_at',
-    my_otp_field: 'otp_driver_pickup',
+    my_otp_field: 'otp_own',
     rpc_step: 'driver_pickup',
     prerequisite_status: 'pending',
     button_text: 'Confirm Collection',
@@ -86,7 +92,7 @@ export const STEP_CONFIG: Record<Step, {
     token_field: 'token_driver_delivery',
     at_field: 'driver_delivery_at',
     partner_at_field: 'client_delivery_at',
-    my_otp_field: 'otp_driver_delivery',
+    my_otp_field: 'otp_own',
     rpc_step: 'driver_delivery',
     prerequisite_status: 'driver_pickup',
     button_text: 'Verify Delivery',
@@ -99,7 +105,7 @@ export const STEP_CONFIG: Record<Step, {
     token_field: 'token_client_delivery',
     at_field: 'client_delivery_at',
     partner_at_field: 'driver_delivery_at',
-    my_otp_field: 'otp_recipient',
+    my_otp_field: 'otp_own',
     rpc_step: 'client_delivery',
     prerequisite_status: 'driver_pickup',
     button_text: 'Verify Receipt',

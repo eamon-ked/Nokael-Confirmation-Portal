@@ -1003,7 +1003,7 @@ export default function ConfirmationPage() {
       try {
         await supabase.rpc('update_job_by_token', { p_token: token, p_updates: { driver_lat: lat, driver_lng: lng } });
         if (step === 'driver-delivery' && !job.driver_arrived_delivery_at) {
-          const distToTarget = calculateDistance(lat, lng, job.drop_lat || 0, job.drop_lng || 0);
+          const distToTarget = calculateDistance(lat, lng, job.delivery_lat || 0, job.delivery_lng || 0);
           if (distToTarget < 500) handleReadyUpdate('driver_arrived_delivery_at');
         }
       } catch (err) { console.error('Failed to sync location telemetry:', err); }
@@ -1034,7 +1034,7 @@ export default function ConfirmationPage() {
       if (watcherId) BackgroundGeolocation.removeWatcher({ id: watcherId });
       if (fallbackWatchId !== null) navigator.geolocation.clearWatch(fallbackWatchId);
     };
-  }, [job?.id, job?.status, config?.role, online, token, step, job?.driver_arrived_delivery_at, job?.drop_lat, job?.drop_lng]);
+  }, [job?.id, job?.status, config?.role, online, token, step, job?.driver_arrived_delivery_at, job?.delivery_lat, job?.delivery_lng]);
 
   function handleRevealOtp() {
     if (otpRevealTimer) clearTimeout(otpRevealTimer);

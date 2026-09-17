@@ -2,7 +2,9 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  /* Apple-style stack: native SF Pro on Apple devices, Inter as the
+     cross-platform fallback so weights/metrics still line up. */
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", ui-sans-serif, system-ui, sans-serif;
   --color-nokael-bg: #f2f4f7;
   --color-nokael-primary: #0f172a;
   --color-nokael-accent: #0369A1;
@@ -55,4 +57,30 @@
 
 .info-value {
   @apply text-sm font-medium text-nokael-text-main;
+}
+
+/* --- Apple-inspired type scale used by the Chain of Custody UI ---
+   The rest of the app leans on heavy tracked all-caps (a "badge" style);
+   these are intentionally quieter: weight and size carry the hierarchy,
+   letter-spacing stays subtle, and large numerals/timestamps get the
+   slightly negative tracking Apple uses on display type. */
+
+.eyebrow {
+  @apply text-[11px] font-semibold uppercase tracking-[0.06em] text-nokael-text-muted/70;
+}
+
+.headline-lg {
+  @apply text-[26px] sm:text-[30px] font-semibold tracking-[-0.02em] text-nokael-primary leading-[1.1];
+}
+
+.headline-md {
+  @apply text-[17px] font-semibold tracking-[-0.01em] text-nokael-primary leading-snug;
+}
+
+.body-text {
+  @apply text-[14px] leading-relaxed text-nokael-text-muted;
+}
+
+.timeline-time {
+  @apply text-[13px] font-medium tabular-nums text-nokael-text-muted;
 }

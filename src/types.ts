@@ -1,5 +1,10 @@
 export type JobStatus = 'pending' | 'client_pickup' | 'driver_pickup' | 'driver_delivery' | 'completed';
 
+// 'four_step' = legacy/default flow with sender + recipient OTP confirmation steps.
+// 'driver_only' = new jobs default to this; the driver confirms both pickup and
+// delivery in their own app, so client_pickup/client_delivery never apply.
+export type ConfirmationMode = 'four_step' | 'driver_only';
+
 export interface Job {
   id: string;
   job_ref: string;
@@ -15,6 +20,9 @@ export interface Job {
   item_type: string;
   urgency: string;
   status: JobStatus;
+  // Returned by get_job_by_token. Absent on stale cached job data from before
+  // this field existed — treat missing/undefined as 'four_step' (legacy behavior).
+  confirmation_mode?: ConfirmationMode;
   client_pickup_at: string | null;
   driver_pickup_at: string | null;
   driver_delivery_at: string | null;

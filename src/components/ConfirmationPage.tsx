@@ -52,6 +52,7 @@ import {
 import { syncPendingConfirmations, startAutoSync, stopAutoSync } from '@/src/lib/sync';
 import { cacheCurrentPage } from '@/src/lib/serviceWorker';
 import DriverMap from './DriverMap';
+import CustodyTimeline from './CustodyTimeline';
 
 // Lazy load Framer Motion
 const MotionDiv = lazy(() => import('motion/react').then(mod => ({ default: mod.motion.div })));
@@ -601,53 +602,20 @@ function JobSummary({ job }: { job: Job }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-12 relative">
               <div className="absolute left-1/2 top-4 bottom-4 w-px bg-slate-100 hidden sm:block" />
               <div className="space-y-2 group/sender">
-                <p className="info-label text-nokael-primary/40">Registered Sender</p>
-                <p className="text-xl font-black text-nokael-primary uppercase tracking-tight group-hover/sender:text-nokael-accent transition-colors">{job.sender_name}</p>
+                <p className="eyebrow">Registered Sender</p>
+                <p className="headline-lg !text-xl group-hover/sender:text-nokael-accent transition-colors">{job.sender_name}</p>
                 <div className="h-1 w-12 bg-nokael-accent/20 rounded-full" />
               </div>
               <div className="space-y-2 text-left sm:text-right group/recipient">
-                <p className="info-label text-nokael-primary/40">Verified Recipient</p>
-                <p className="text-xl font-black text-nokael-primary uppercase tracking-tight group-hover/recipient:text-nokael-success transition-colors">{job.recipient_name}</p>
+                <p className="eyebrow">Verified Recipient</p>
+                <p className="headline-lg !text-xl group-hover/recipient:text-nokael-success transition-colors">{job.recipient_name}</p>
                 <div className="h-1 w-12 bg-nokael-success/20 rounded-full ml-0 sm:ml-auto" />
               </div>
             </div>
-            <div className="relative pl-10 sm:pl-16 space-y-16 py-4">
-              <div className="absolute left-[7px] sm:left-[11px] top-6 bottom-6 w-[2px] bg-gradient-to-b from-nokael-primary/20 via-slate-100 to-nokael-success/20" />
-              <div className="relative animate-in fade-in slide-in-from-left duration-700 delay-200">
-                <div className="absolute -left-[35px] sm:-left-[47px] top-1 w-6 h-6 rounded-full bg-white border-4 border-nokael-primary shadow-sm flex items-center justify-center">
-                   <div className="w-2 h-2 bg-nokael-primary rounded-full" />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                   <div className="space-y-1">
-                      <p className="info-label !mb-0 !text-nokael-primary/50 uppercase">Chain of Custody: Collection</p>
-                      <p className="text-lg font-black text-nokael-primary leading-tight">{job.pickup_location}, {job.pickup_emirate}</p>
-                   </div>
-                   <div className="flex flex-col sm:items-end justify-center">
-                      <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-100/50 rounded-lg text-[11px] font-black text-nokael-text-main shadow-sm border border-slate-200/50">
-                        <Clock className="w-3.5 h-3.5 text-nokael-primary" />
-                        <span>VERIFIED: {formatUAETime(job.client_pickup_at)}</span>
-                      </div>
-                   </div>
-                </div>
-              </div>
-              <div className="relative animate-in fade-in slide-in-from-left duration-1000 delay-500">
-                <div className="absolute -left-[35px] sm:-left-[47px] top-1 w-6 h-6 rounded-full bg-white border-4 border-nokael-success shadow-sm flex items-center justify-center">
-                   <CheckCircle2 className="w-3 h-3 text-nokael-success" />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                   <div className="space-y-1">
-                      <p className="info-label !mb-0 !text-nokael-success/60 uppercase">Protocol Completion: Delivery</p>
-                      <p className="text-lg font-black text-nokael-primary leading-tight">{job.delivery_location}, {job.delivery_emirate}</p>
-                   </div>
-                   <div className="flex flex-col sm:items-end justify-center">
-                      <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-nokael-success/10 rounded-lg text-[11px] font-black text-nokael-success shadow-sm border border-nokael-success/10">
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>COMPLETED: {formatUAETime(job.client_delivery_at)}</span>
-                      </div>
-                   </div>
-                </div>
-              </div>
-            </div>
+
+            {/* Full Chain of Custody — every real milestone, not just the
+                two collection/delivery endpoints */}
+            <CustodyTimeline job={job} />
           </div>
           <div className="bg-slate-900 text-white/40 p-6 flex flex-wrap justify-center sm:justify-between items-center gap-4 text-[9px] font-black uppercase tracking-[0.3em]">
              <div className="flex items-center gap-2"><div className="w-1.5 h-1.5 bg-nokael-success rounded-full" />Secure Handover Confirmed</div>
@@ -673,6 +641,48 @@ function JobSummary({ job }: { job: Job }) {
         </div>
       </MotionDiv>
     </Suspense>
+  );
+}
+
+// Shown instead of the OTP form for client-pickup / client-delivery links on a
+// `driver_only` job: the driver confirms both legs in their own app, so there is
+// no sender/recipient handshake for this job to do here. Falls back to a live
+// tracking view (map + status) using data that's valid regardless of mode.
+function DriverOnlyNotice({ job, step }: { job: Job; step: Step }) {
+  const legLabel = step === 'client-pickup' ? 'Pickup' : 'Delivery';
+  const showLiveMap = job.status === 'driver_pickup' || job.status === 'driver_delivery';
+
+  return (
+    <div className="space-y-8 animate-in fade-in duration-700">
+      <div className="nokael-card !p-10 border-nokael-accent/20 bg-nokael-accent/[0.02] shadow-2xl text-center space-y-5 relative overflow-hidden">
+        <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+          <Truck className="w-32 h-32 text-nokael-accent" />
+        </div>
+        <div className="w-16 h-16 bg-nokael-accent/10 rounded-full flex items-center justify-center mx-auto relative z-10">
+          <ShieldCheck className="w-8 h-8 text-nokael-accent" />
+        </div>
+        <div className="space-y-2 relative z-10">
+          <h1 className="text-2xl sm:text-3xl font-black text-nokael-primary uppercase tracking-tighter italic">
+            {legLabel} Confirmed By Driver
+          </h1>
+          <p className="text-nokael-text-muted text-sm max-w-md mx-auto font-medium leading-relaxed">
+            This delivery is confirmed directly by the driver — no action needed here. You can still track progress below.
+          </p>
+        </div>
+      </div>
+
+      {showLiveMap && (
+        <div className="space-y-4 animate-in fade-in duration-700">
+          <DriverMap job={job} />
+        </div>
+      )}
+
+      <div className="flex items-center justify-center gap-2 text-nokael-primary/30">
+        <div className="w-1.5 h-1.5 bg-nokael-primary/30 rounded-full animate-pulse" />
+        <span className="text-[10px] font-black uppercase tracking-[0.2em]">Status updates automatically</span>
+        <div className="w-1.5 h-1.5 bg-nokael-primary/30 rounded-full animate-pulse" />
+      </div>
+    </div>
   );
 }
 
@@ -783,16 +793,16 @@ function StepCompletedView({ job, step, config }: { job: Job; step: Step; config
           {/* Header bar */}
           <div className="bg-slate-50 px-7 py-5 border-b border-nokael-border flex flex-wrap justify-between items-center gap-3">
             <div>
-              <span className="text-[9px] font-black uppercase tracking-[0.25em] text-nokael-primary/30">Real-Time Possession Tracker</span>
-              <p className="text-sm font-black text-nokael-primary uppercase tracking-tight mt-0.5">Current Custody Status</p>
+              <span className="eyebrow">Real-Time Possession Tracker</span>
+              <p className="headline-md mt-0.5">Current Custody Status</p>
             </div>
-            <div className={`px-3 py-1.5 border rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2 ${custodian.statusColor}`}>
+            <div className={`px-3 py-1.5 border rounded-full text-[11px] font-semibold flex items-center gap-2 ${custodian.statusColor}`}>
               <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${custodian.dotColor}`} />
               {custodian.statusLabel}
             </div>
           </div>
 
-          <div className="p-7 space-y-6">
+          <div className="p-7 space-y-7">
             {/* Custodian identity block */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 bg-slate-50/60 p-6 rounded-[24px] border border-slate-100">
               <div className="flex items-center gap-4">
@@ -800,15 +810,15 @@ function StepCompletedView({ job, step, config }: { job: Job; step: Step; config
                   <CustodianIcon className="w-7 h-7" />
                 </div>
                 <div>
-                  <span className="text-[9px] font-black uppercase tracking-[0.25em] text-nokael-primary/30 block mb-0.5">Package Held By</span>
-                  <h4 className="text-base font-black text-nokael-primary uppercase tracking-tight leading-none">{custodian.role}</h4>
-                  <p className="text-xs font-bold text-nokael-text-muted mt-1">{custodian.name}</p>
+                  <span className="eyebrow block mb-0.5">Package Held By</span>
+                  <h4 className="headline-md leading-none">{custodian.role}</h4>
+                  <p className="text-[13px] font-medium text-nokael-text-muted mt-1.5">{custodian.name}</p>
                 </div>
               </div>
               {custodian.phone && (
                 <a
                   href={`tel:${custodian.phone}`}
-                  className="w-full sm:w-auto px-6 py-3 bg-slate-900 text-white rounded-xl text-[11px] font-black uppercase tracking-wider flex items-center justify-center gap-2 hover:bg-nokael-primary transition-all shadow-md active:scale-95"
+                  className="w-full sm:w-auto px-6 py-3 bg-slate-900 text-white rounded-xl text-[13px] font-semibold flex items-center justify-center gap-2 hover:bg-nokael-primary transition-all shadow-md active:scale-95"
                 >
                   <Phone className="w-4 h-4 fill-white" />
                   Call Contact
@@ -816,28 +826,9 @@ function StepCompletedView({ job, step, config }: { job: Job; step: Step; config
               )}
             </div>
 
-            {/* Location + guarantee grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-1">
-              <div className="p-5 bg-slate-50/40 rounded-[20px] border border-slate-100/60 space-y-1.5">
-                <span className="text-[9px] font-black uppercase tracking-[0.25em] text-nokael-primary/30 flex items-center gap-1.5">
-                  <MapPin className="w-3 h-3" />{custodian.locationLabel}
-                </span>
-                <p className="text-sm font-black text-nokael-primary leading-snug">{custodian.locationValue}</p>
-              </div>
-              <div className="p-5 bg-slate-50/40 rounded-[20px] border border-slate-100/60 space-y-1.5">
-                <span className="text-[9px] font-black uppercase tracking-[0.25em] text-nokael-primary/30 flex items-center gap-1.5">
-                  <ShieldCheck className="w-3 h-3" />Security Guarantee
-                </span>
-                <p className="text-xs text-nokael-text-muted font-bold leading-relaxed">{custodian.custodyText}</p>
-              </div>
-            </div>
-
-            {/* Custody chain seal */}
-            <div className="flex items-center justify-between p-4 bg-slate-900 rounded-2xl text-white/40 text-[9px] font-black uppercase tracking-[0.2em]">
-              <div className="flex items-center gap-2"><div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />Handover Locked</div>
-              <div className="flex items-center gap-2"><div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />GPS Anchored</div>
-              <div className="flex items-center gap-2"><div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />Chain Verified</div>
-            </div>
+            {/* Real Chain of Custody timeline — every node below is an actual
+                job timestamp, not a description of the current role */}
+            <CustodyTimeline job={job} compact />
           </div>
         </div>
 
@@ -846,10 +837,10 @@ function StepCompletedView({ job, step, config }: { job: Job; step: Step; config
           <div className="space-y-4 animate-in fade-in duration-700">
             <div className="flex items-center justify-between px-1">
               <div>
-                <span className="text-[9px] font-black uppercase tracking-[0.25em] text-nokael-primary/30">Live Dispatch Map</span>
-                <p className="text-sm font-black text-nokael-primary uppercase tracking-tight mt-0.5">Track Courier Progress</p>
+                <span className="eyebrow">Live Dispatch Map</span>
+                <p className="headline-md mt-0.5">Track Courier Progress</p>
               </div>
-              <div className="px-3 py-1 bg-nokael-accent/10 border border-nokael-accent/15 rounded-full text-[9px] font-black uppercase tracking-widest text-nokael-accent animate-pulse">
+              <div className="px-3 py-1 bg-nokael-accent/10 border border-nokael-accent/15 rounded-full text-[11px] font-semibold text-nokael-accent animate-pulse">
                 Live GPS Uplink
               </div>
             </div>
@@ -888,63 +879,39 @@ function LogisticsDetail({ job }: { job: Job }) {
              <Package className="w-7 h-7" />
            </div>
            <div>
-             <h3 className="text-[15px] font-black uppercase tracking-[0.1em] text-nokael-primary leading-none mb-1">Logistics Detail</h3>
-             <p className="text-[11px] font-bold text-nokael-text-muted uppercase tracking-wider">{job.job_ref}</p>
+             <h3 className="headline-md leading-none mb-1">Logistics Detail</h3>
+             <p className="text-[13px] font-medium text-nokael-text-muted">{job.job_ref}</p>
            </div>
          </div>
          <div className="flex items-center gap-2.5 px-4 pr-6 py-2.5 bg-[#E6F0F8] rounded-full border border-[#D0E2F0]">
             <div className="w-1.5 h-4 bg-[#7FB5D8] rounded-full shadow-sm" />
-            <span className="text-[11px] font-black uppercase tracking-[0.15em] text-[#2C5282] leading-none mb-0.5">{getStatusLabel(job.status)}</span>
+            <span className="text-[12px] font-semibold text-[#2C5282] leading-none mb-0.5">{getStatusLabel(job.status)}</span>
          </div>
        </div>
-       <div className="p-8 space-y-10">
+       <div className="p-8 space-y-9">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            <div className="space-y-2 p-6 bg-slate-50/40 rounded-[24px] border border-slate-100/60 flex flex-col justify-center group/card transition-colors hover:bg-slate-50">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-nokael-primary/30 mb-1">Registration Timestamp</p>
+            <div className="space-y-1.5 p-6 bg-slate-50/40 rounded-[24px] border border-slate-100/60 flex flex-col justify-center group/card transition-colors hover:bg-slate-50">
+              <p className="eyebrow">Manifest Logged</p>
               <div className="flex items-center gap-3">
                 <Clock className="w-4 h-4 text-nokael-primary/40 group-hover/card:text-nokael-secondary transition-colors" />
-                <p className="text-[15px] font-extrabold text-nokael-primary leading-tight">
-                  {job.client_pickup_at ? formatUAETime(job.client_pickup_at) : 'Awaiting Collection...'}
+                <p className="headline-md">
+                  {formatUAETime(job.created_at)}
                 </p>
               </div>
             </div>
-            <div className="space-y-2 p-6 bg-slate-50/40 rounded-[24px] border border-slate-100/60 flex flex-col justify-center group/card transition-colors hover:bg-slate-50">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-nokael-primary/30 mb-1">System Reference Code</p>
+            <div className="space-y-1.5 p-6 bg-slate-50/40 rounded-[24px] border border-slate-100/60 flex flex-col justify-center group/card transition-colors hover:bg-slate-50">
+              <p className="eyebrow">System Reference Code</p>
               <div className="flex items-center gap-3">
                 <Key className="w-4 h-4 text-nokael-primary/40 group-hover/card:text-nokael-accent transition-colors rotate-45" />
-                <p className="text-[15px] font-black text-nokael-primary uppercase tracking-tight">{job.job_ref}</p>
+                <p className="headline-md">{job.job_ref}</p>
               </div>
             </div>
           </div>
-          <div className="space-y-8 px-2">
-            <div className="relative pl-12 py-1">
-              <div className="absolute left-[8px] top-6 bottom-6 w-[2px] bg-gradient-to-b from-nokael-primary via-slate-100 to-nokael-success" />
-              <div className="relative mb-14 animate-in slide-in-from-left duration-700">
-                <div className="absolute -left-[45px] top-0 w-8 h-8 rounded-full bg-white border-[3px] border-nokael-primary shadow-sm flex items-center justify-center">
-                   <div className="w-3.5 h-3.5 rounded-full border-2 border-nokael-primary flex items-center justify-center">
-                     <div className="w-1 h-1 bg-nokael-primary rounded-full" />
-                   </div>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-[11px] font-black uppercase tracking-[0.2em] text-nokael-primary/30 mb-0.5">Departure Protocol</p>
-                  <p className="text-[19px] font-black text-nokael-primary leading-tight tracking-tight capitalize">{job.pickup_location}, {job.pickup_emirate}</p>
-                </div>
-              </div>
-              <div className="relative mt-8 animate-in slide-in-from-left duration-1000">
-                <div className="absolute -left-[45px] top-0 w-8 h-8 rounded-full bg-nokael-success shadow-[0_4px_12px_rgba(16,185,129,0.3)] flex items-center justify-center border-2 border-white">
-                   <CheckCircle2 className="w-4 h-4 text-white" />
-                </div>
-                <div className="space-y-1">
-                  <p className="text-[11px] font-black uppercase tracking-[0.2em] text-nokael-success/40 mb-0.5">Destination Protocol</p>
-                  <p className="text-[19px] font-black text-nokael-primary leading-tight tracking-tight capitalize">{job.delivery_location}, {job.delivery_emirate}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="p-8 bg-slate-50/60 border border-slate-200/50 rounded-[28px] relative overflow-hidden flex items-center justify-center">
-            <p className="text-[13px] leading-relaxed text-nokael-text-muted font-bold italic text-center max-w-[280px]">
-              Professional Proof of Collection System — Protected by Nokael Custody Chain protocol.
-            </p>
+
+          {/* Real Chain of Custody timeline — actual milestone timestamps
+              in place of the old two-point Departure/Destination summary */}
+          <div className="px-1">
+            <CustodyTimeline job={job} />
           </div>
        </div>
     </section>
@@ -1228,6 +1195,13 @@ export default function ConfirmationPage() {
           if (rpcError) throw rpcError;
           if (data?.error === 'locked') { setIsLocked(true); }
           else if (data?.error === 'invalid_otp') { setError('Incorrect code. Please double-check with the other person.'); setPartnerOtp(''); }
+          else if (data?.error === 'step_not_applicable') {
+            // Safety net for driver_only jobs: shouldn't normally be reachable since
+            // DriverOnlyNotice replaces this form, but covers stale cached pages or
+            // a job that changed mode mid-session.
+            setError("This step isn't needed for this job — the driver confirms it directly.");
+            setPartnerOtp('');
+          }
           else if (data?.error) setError(data.error);
           else await fetchJob();
 
@@ -1350,6 +1324,15 @@ export default function ConfirmationPage() {
 
   const renderRoleView = () => {
     if (job?.status === 'completed') return <JobSummary job={job} />;
+
+    // driver_only jobs skip the client_pickup/client_delivery handshake entirely —
+    // the driver confirms both legs in their own app. Check this before falling
+    // into the OTP form logic below, regardless of what isStepCompleted says.
+    const isClientStep = step === 'client-pickup' || step === 'client-delivery';
+    if (isClientStep && job?.confirmation_mode === 'driver_only') {
+      return <DriverOnlyNotice job={job!} step={step} />;
+    }
+
     if (isStepCompleted) return <StepCompletedView job={job} step={step} config={config} />;
 
     // Own side confirmed — waiting for partner

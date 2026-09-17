@@ -644,13 +644,16 @@ function JobSummary({ job }: { job: Job }) {
   );
 }
 
-// Shown instead of the OTP form for client-pickup / client-delivery links on a
-// `driver_only` job: the driver confirms both legs in their own app, so there is
-// no sender/recipient handshake for this job to do here. Falls back to a live
-// tracking view (map + status) using data that's valid regardless of mode.
-function DriverOnlyNotice({ job, step }: { job: Job; step: Step }) {
-  const legLabel = step === 'client-pickup' ? 'Pickup' : 'Delivery';
-  const showLiveMap = job.status === 'driver_pickup' || job.status === 'driver_delivery';
+// Shown instead of the OTP form for ANY step on a `driver_only` job. These jobs
+// skip this portal's OTP handshake entirely on both ends — the driver enters
+// both pickup and delivery OTPs in the NDP1 Android app instead, so neither the
+// client-pickup/client-delivery views NOR the driver-pickup/driver-delivery
+// CourierView apply here. Falls back to a live tracking view (map + status)
+// using data that's valid regardless of mode.
+function DriverOnlyNotice({ job, step, config }: { job: Job; step: Step; config: any }) {
+  const legLabel = step.includes('pickup') ? 'Pickup' : 'Delivery';
+  const isDriverViewer = config?.role === 'driver';
+  const showLiveMap = !isDriverViewer && (job.status === 'driver_pickup' || job.status === 'driver_delivery');
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
@@ -663,10 +666,12 @@ function DriverOnlyNotice({ job, step }: { job: Job; step: Step }) {
         </div>
         <div className="space-y-2 relative z-10">
           <h1 className="text-2xl sm:text-3xl font-black text-nokael-primary uppercase tracking-tighter italic">
-            {legLabel} Confirmed By Driver
+            {isDriverViewer ? `Confirm ${legLabel} In The Driver App` : `${legLabel} Confirmed By Driver`}
           </h1>
           <p className="text-nokael-text-muted text-sm max-w-md mx-auto font-medium leading-relaxed">
-            This delivery is confirmed directly by the driver — no action needed here. You can still track progress below.
+            {isDriverViewer
+              ? 'This job runs in 2-step (driver-only) mode — confirm pickup and delivery from the Nokael Driver app, not this link. No action is needed on this page.'
+              : 'This delivery is confirmed directly by the driver — no action needed here. You can still track progress below.'}
           </p>
         </div>
       </div>
@@ -1325,12 +1330,14 @@ export default function ConfirmationPage() {
   const renderRoleView = () => {
     if (job?.status === 'completed') return <JobSummary job={job} />;
 
-    // driver_only jobs skip the client_pickup/client_delivery handshake entirely —
-    // the driver confirms both legs in their own app. Check this before falling
-    // into the OTP form logic below, regardless of what isStepCompleted says.
-    const isClientStep = step === 'client-pickup' || step === 'client-delivery';
-    if (isClientStep && job?.confirmation_mode === 'driver_only') {
-      return <DriverOnlyNotice job={job!} step={step} />;
+    // driver_only jobs skip this portal's entire OTP handshake — both the
+    // client-pickup/client-delivery legs AND the driver-pickup/driver-delivery
+    // legs, since the driver enters both OTPs in the NDP1 app instead. Check
+    // this before falling into any of the role-view logic below, regardless of
+    // what isStepCompleted says (it's derived from *_at columns that never get
+    // set via this portal in driver_only mode, so it can't be trusted here).
+    if (job?.confirmation_mode === 'driver_only') {
+      return <DriverOnlyNotice job={job!} step={step} config={config} />;
     }
 
     if (isStepCompleted) return <StepCompletedView job={job} step={step} config={config} />;

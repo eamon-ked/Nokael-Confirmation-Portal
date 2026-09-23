@@ -107,10 +107,10 @@ function SenderView({ job, step, config, online, handleReadyUpdate, handleReveal
              <p className="info-label text-nokael-accent !mb-0 font-black tracking-[0.2em]">Your Pickup Confirmation Code</p>
              <button
                onClick={handleRevealOtp}
-               className="w-full relative flex items-center justify-center py-8 rounded-3xl border-2 border-dashed border-nokael-accent/30 bg-white shadow-xl shadow-nokael-accent/5 transition-all active:scale-[0.98] group"
+               className="w-full relative flex items-center justify-center py-6 sm:py-8 px-4 rounded-3xl border-2 border-dashed border-nokael-accent/30 bg-white shadow-xl shadow-nokael-accent/5 transition-all active:scale-[0.98] group overflow-hidden"
              >
                {showMyOtp ? (
-                 <span className="text-6xl font-black font-mono tracking-[0.2em] text-nokael-primary select-all drop-shadow-sm">{myOtp}</span>
+                 <span className="text-3xl sm:text-5xl md:text-6xl font-black font-mono tracking-[0.15em] sm:tracking-[0.2em] text-nokael-primary select-all drop-shadow-sm pl-[0.15em] sm:pl-[0.2em] break-all">{myOtp}</span>
                ) : (
                  <div className="flex flex-col items-center gap-2 text-nokael-accent">
                    <QrCode className="w-10 h-10 group-hover:scale-110 transition-transform mb-1" />
@@ -156,7 +156,7 @@ function SenderView({ job, step, config, online, handleReadyUpdate, handleReveal
             type="text" 
             inputMode="numeric"
             placeholder="••••••"
-            className={`w-full h-24 bg-white border-2 rounded-[32px] text-4xl font-black font-mono tracking-[0.4em] text-center focus:ring-12 transition-all outline-none shadow-2xl
+            className={`w-full h-20 sm:h-24 bg-white border-2 rounded-[24px] sm:rounded-[32px] text-2xl sm:text-4xl font-black font-mono tracking-[0.2em] sm:tracking-[0.4em] text-center focus:ring-12 transition-all outline-none shadow-2xl pl-[0.2em] sm:pl-[0.4em]
               ${error ? 'border-red-200 focus:ring-red-50/50 bg-red-50/10' : 'border-nokael-border focus:ring-nokael-primary/5 focus:border-nokael-primary'}`}
             value={partnerOtp}
             onChange={(e) => setPartnerOtp(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
@@ -248,10 +248,10 @@ function CourierView({ job, step, online, handleReadyUpdate, partnerOtp, setPart
                <p className="info-label text-nokael-accent !mb-0 font-black tracking-[0.2em]">Your Courier Security Code</p>
                <button
                  onClick={handleRevealOtp}
-                 className="w-full relative flex items-center justify-center py-8 rounded-3xl border-2 border-dashed border-nokael-accent/30 bg-white shadow-xl shadow-nokael-accent/5 transition-all active:scale-[0.98] group"
+                 className="w-full relative flex items-center justify-center py-6 sm:py-8 px-4 rounded-3xl border-2 border-dashed border-nokael-accent/30 bg-white shadow-xl shadow-nokael-accent/5 transition-all active:scale-[0.98] group overflow-hidden"
                >
                  {showMyOtp ? (
-                   <span className="text-6xl font-black font-mono tracking-[0.2em] text-nokael-primary select-all drop-shadow-sm">{myOtp}</span>
+                   <span className="text-3xl sm:text-5xl md:text-6xl font-black font-mono tracking-[0.15em] sm:tracking-[0.2em] text-nokael-primary select-all drop-shadow-sm pl-[0.15em] sm:pl-[0.2em] break-all">{myOtp}</span>
                  ) : (
                    <div className="flex flex-col items-center gap-2 text-nokael-accent">
                      <QrCode className="w-10 h-10 group-hover:scale-110 transition-transform mb-1" />
@@ -309,7 +309,7 @@ function CourierView({ job, step, online, handleReadyUpdate, partnerOtp, setPart
                 type="text" 
                 inputMode="numeric"
                 placeholder="••••••"
-                className={`w-full h-24 bg-white border-2 rounded-[32px] text-5xl font-black font-mono tracking-[0.4em] text-center focus:ring-12 transition-all outline-none shadow-2xl
+                className={`w-full h-20 sm:h-24 bg-white border-2 rounded-[24px] sm:rounded-[32px] text-2xl sm:text-4xl md:text-5xl font-black font-mono tracking-[0.2em] sm:tracking-[0.4em] text-center focus:ring-12 transition-all outline-none shadow-2xl pl-[0.2em] sm:pl-[0.4em]
                   ${!prereqMet ? 'opacity-40 pointer-events-none' : ''}
                   ${error ? 'border-red-200 focus:ring-red-50/50 bg-red-50/10' : 'border-nokael-border focus:ring-nokael-primary/5 focus:border-nokael-primary'}`}
                 value={partnerOtp}
@@ -424,7 +424,7 @@ function RecipientView({ job, step, config, online, handleReadyUpdate, handleRev
                <div className="bg-white rounded-[28px] p-6 sm:p-8 w-full max-w-sm shadow-[0_32px_64px_-12px_rgba(0,0,0,0.4)] space-y-6">
                  <div>
                    <p className="info-label text-nokael-primary/40 !mb-2 text-[9px] tracking-widest uppercase">Your Verification Code</p>
-                   <div className="text-5xl font-black font-mono tracking-[0.2em] text-nokael-primary">{myOtp}</div>
+                   <div className="text-3xl sm:text-4xl md:text-5xl font-black font-mono tracking-[0.15em] sm:tracking-[0.2em] text-nokael-primary pl-[0.15em] sm:pl-[0.2em] break-all">{myOtp}</div>
                    <p className="text-[10px] text-nokael-text-muted mt-1 font-bold italic">Courier can enter this on their device</p>
                  </div>
                  
@@ -477,7 +477,7 @@ function RecipientView({ job, step, config, online, handleReadyUpdate, handleRev
               {showMyOtp ? (
                 <div className="space-y-4 text-center w-full">
                    <p className="text-[11px] font-black text-nokael-primary/40 uppercase tracking-widest">Share this with courier upon arrival</p>
-                   <div className="text-5xl font-black font-mono tracking-[0.4em] text-nokael-primary bg-slate-50 p-6 rounded-2xl border-2 border-slate-100">{myOtp}</div>
+                   <div className="text-3xl sm:text-4xl md:text-5xl font-black font-mono tracking-[0.15em] sm:tracking-[0.25em] text-nokael-primary bg-slate-50 p-4 sm:p-6 rounded-2xl border-2 border-slate-100 pl-[0.15em] sm:pl-[0.25em] overflow-hidden break-all">{myOtp}</div>
                    <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest">Hides in 10s for security</p>
                 </div>
               ) : (
@@ -515,7 +515,7 @@ function RecipientView({ job, step, config, online, handleReadyUpdate, handleRev
                    type="text" 
                    inputMode="numeric"
                    placeholder="••••••"
-                   className={`w-full h-20 bg-white border-2 rounded-[24px] text-3xl font-black font-mono tracking-[0.4em] text-center focus:ring-10 transition-all outline-none shadow-md
+                   className={`w-full h-16 sm:h-20 bg-white border-2 rounded-[20px] sm:rounded-[24px] text-2xl sm:text-3xl font-black font-mono tracking-[0.2em] sm:tracking-[0.4em] text-center focus:ring-10 transition-all outline-none shadow-md pl-[0.2em] sm:pl-[0.4em]
                      ${error ? 'border-red-200 focus:ring-red-50/50 bg-red-50/10' : 'border-nokael-border focus:ring-nokael-primary/5 focus:border-nokael-primary'}`}
                    value={partnerOtp}
                    onChange={(e) => setPartnerOtp(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
@@ -972,13 +972,18 @@ export default function ConfirmationPage() {
     let fallbackWatchId: number | null = null;
 
     const updateLocation = async (lat: number, lng: number) => {
+      if (!token || typeof lat !== 'number' || typeof lng !== 'number' || isNaN(lat) || isNaN(lng)) return;
       try {
-        await supabase.rpc('update_job_by_token', { p_token: token, p_updates: { driver_lat: lat, driver_lng: lng } });
+        const { error: rpcErr } = await supabase.rpc('update_job_by_token', { p_token: token, p_updates: { driver_lat: lat, driver_lng: lng } });
+        if (rpcErr) {
+          console.warn('[Location] Telemetry sync skipped/unauthorized:', rpcErr.message || rpcErr);
+          return;
+        }
         if (step === 'driver-delivery' && !job.driver_arrived_delivery_at) {
           const distToTarget = calculateDistance(lat, lng, job.delivery_lat || 0, job.delivery_lng || 0);
           if (distToTarget < 500) handleReadyUpdate('driver_arrived_delivery_at');
         }
-      } catch (err) { console.error('Failed to sync location telemetry:', err); }
+      } catch (err) { console.warn('Failed to sync location telemetry:', err); }
     };
 
     const startTracking = async () => {
@@ -988,7 +993,9 @@ export default function ConfirmationPage() {
             { backgroundMessage: "Syncing your coordinates for the recipient map.", backgroundTitle: "Nokael Driver Trace", requestPermissions: true, stale: false, distanceFilter: 10 },
             (location: any, error: any) => {
               if (error) { if (error.code === "NOT_AUTHORIZED") console.warn('[Location] Permissions denied'); return; }
-              if (location) updateLocation(location.latitude, location.longitude);
+              if (location && typeof location.latitude === 'number' && typeof location.longitude === 'number') {
+                updateLocation(location.latitude, location.longitude);
+              }
             }
           );
         } catch (e) { console.error('[Location] Background plugin failed, using fallback:', e); }
@@ -996,7 +1003,13 @@ export default function ConfirmationPage() {
       if (!watcherId && navigator.geolocation) {
         fallbackWatchId = navigator.geolocation.watchPosition(
           (position) => updateLocation(position.coords.latitude, position.coords.longitude),
-          (err) => console.error('[Location] Browser geolocation error:', err),
+          (err) => {
+            if (err.code === 1) {
+              console.warn('[Location] Geolocation permission denied by user.');
+            } else {
+              console.warn('[Location] Geolocation unavailable or timed out:', err.message);
+            }
+          },
           { enableHighAccuracy: true, timeout: 20000, maximumAge: 10000 }
         );
       }
@@ -1345,17 +1358,17 @@ export default function ConfirmationPage() {
     // Own side confirmed — waiting for partner
     if (isConfirmed && !isPartnerConfirmed) {
       return (
-        <div className="nokael-card text-center !p-12 space-y-8 animate-in fade-in duration-700">
-           <div className="w-24 h-24 bg-nokael-accent/10 rounded-full flex items-center justify-center mx-auto">
-              <History className="w-12 h-12 text-nokael-accent animate-[spin_5s_linear_infinite]" />
+        <div className="nokael-card text-center !p-6 sm:!p-10 space-y-6 sm:space-y-8 animate-in fade-in duration-700">
+           <div className="w-20 h-20 sm:w-24 sm:h-24 bg-nokael-accent/10 rounded-full flex items-center justify-center mx-auto">
+              <History className="w-10 h-10 sm:w-12 sm:h-12 text-nokael-accent animate-[spin_5s_linear_infinite]" />
            </div>
            <div className="space-y-2">
-              <h1 className="text-3xl font-black text-nokael-primary uppercase tracking-tighter italic">Syncing Handover...</h1>
-              <p className="text-nokael-text-muted font-medium">Wait for the <span className="font-bold text-nokael-accent uppercase">{config.partner_role}</span> to acknowledge your arrival.</p>
+              <h1 className="text-2xl sm:text-3xl font-black text-nokael-primary uppercase tracking-tighter italic">Syncing Handover...</h1>
+              <p className="text-nokael-text-muted text-sm sm:text-base font-medium">Wait for the <span className="font-bold text-nokael-accent uppercase">{config.partner_role}</span> to acknowledge your arrival.</p>
            </div>
-           <div className="bg-slate-50 rounded-3xl p-8 border-2 border-dashed border-slate-200">
-              <p className="text-[10px] font-black text-nokael-primary/30 uppercase tracking-[0.2em] mb-4">Your Verification Code</p>
-              <div className="text-6xl font-black font-mono tracking-[0.4em] text-nokael-primary">{myOtp}</div>
+           <div className="bg-slate-50 rounded-2xl sm:rounded-3xl p-5 sm:p-8 border-2 border-dashed border-slate-200 overflow-hidden">
+              <p className="text-[10px] font-black text-nokael-primary/30 uppercase tracking-[0.2em] mb-3 sm:mb-4">Your Verification Code</p>
+              <div className="text-3xl sm:text-5xl md:text-6xl font-black font-mono tracking-[0.15em] sm:tracking-[0.25em] text-nokael-primary select-all break-all inline-block pl-[0.15em] sm:pl-[0.25em]">{myOtp}</div>
            </div>
            <div className="flex items-center justify-center gap-2 text-nokael-primary/30">
              <div className="w-1.5 h-1.5 bg-nokael-primary/30 rounded-full animate-pulse" />

@@ -15,7 +15,7 @@ import {
   Moon,
   Package,
   Sun,
-
+  Download,
 } from 'lucide-react';
 
 // Matches the font stack used on DriverHub so both driver-facing screens feel
@@ -65,7 +65,42 @@ export default function DriverStatusPage() {
 
   const [jobs, setJobs] = useState<ActiveJob[]>([]);
   const [jobsLoading, setJobsLoading] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState<any>(null);
 
+  useEffect(() => {
+    // Check if the install prompt is already captured on window
+    if ((window as any).deferredPWAInstallPrompt) {
+      setInstallPrompt((window as any).deferredPWAInstallPrompt);
+    }
+
+    const handlePromptReady = () => {
+      if ((window as any).deferredPWAInstallPrompt) {
+        setInstallPrompt((window as any).deferredPWAInstallPrompt);
+      }
+    };
+
+    window.addEventListener('nokael_pwa_prompt_ready', handlePromptReady);
+    window.addEventListener('beforeinstallprompt', handlePromptReady);
+
+    return () => {
+      window.removeEventListener('nokael_pwa_prompt_ready', handlePromptReady);
+      window.removeEventListener('beforeinstallprompt', handlePromptReady);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!installPrompt) return;
+    try {
+      installPrompt.prompt();
+      const { outcome } = await installPrompt.userChoice;
+      console.log(`[PWA] User response to install prompt: ${outcome}`);
+    } catch (err) {
+      console.error('[PWA] Installation prompt failed:', err);
+    } finally {
+      (window as any).deferredPWAInstallPrompt = null;
+      setInstallPrompt(null);
+    }
+  };
 
   const loggedIn = Boolean(driverId && localStorage.getItem(SESSION_KEY_PREFIX + driverId));
 
@@ -221,6 +256,27 @@ export default function DriverStatusPage() {
           <p className="text-nokael-text-muted text-[14px]">{info?.full_name ? `Welcome back, ${info.full_name.split(' ')[0]}` : 'Enter your PIN to continue'}</p>
         </div>
 
+        {installPrompt && (
+          <div className="nokael-card !p-4 border border-nokael-border bg-white flex flex-col gap-3 animate-in fade-in duration-300">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center shrink-0">
+                <Download className="w-4 h-4 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-[14px] font-bold text-slate-900 tracking-tight leading-none mb-0.5">Install PWA App</h3>
+                <p className="text-[11px] text-slate-500">Enable offline jobs & fast home screen access</p>
+              </div>
+            </div>
+            <button
+              onClick={handleInstallClick}
+              className="w-full h-11 bg-slate-900 text-white font-bold text-[12px] uppercase tracking-widest rounded-xl hover:bg-slate-800 transition-colors flex items-center justify-center gap-1.5 active:scale-[0.98]"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Install App
+            </button>
+          </div>
+        )}
+
         <form onSubmit={handlePinSubmit} className="space-y-4">
           <input
             type="password"
@@ -259,6 +315,27 @@ export default function DriverStatusPage() {
         <h1 className="text-[20px] font-semibold text-nokael-primary tracking-tight">Hi {info.full_name.split(' ')[0]}</h1>
         {info.tier && <p className="text-nokael-text-muted text-[13px]">Tier {info.tier} Driver</p>}
       </header>
+
+      {installPrompt && (
+        <div className="nokael-card !p-4 border border-nokael-border bg-white flex flex-col gap-3 animate-in fade-in duration-300">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center shrink-0">
+              <Download className="w-4 h-4 text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-[14px] font-bold text-slate-900 tracking-tight leading-none mb-0.5">Install Driver App</h3>
+              <p className="text-[11px] text-slate-500">Add to home screen for direct job updates</p>
+            </div>
+          </div>
+          <button
+            onClick={handleInstallClick}
+            className="w-full h-11 bg-slate-900 text-white font-bold text-[12px] uppercase tracking-widest rounded-xl hover:bg-slate-800 transition-colors flex items-center justify-center gap-1.5 active:scale-[0.98]"
+          >
+            <Download className="w-3.5 h-3.5" />
+            Install App
+          </button>
+        </div>
+      )}
 
 
 

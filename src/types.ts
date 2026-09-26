@@ -1,4 +1,6 @@
-export type JobStatus = 'pending' | 'client_pickup' | 'driver_pickup' | 'driver_delivery' | 'completed';
+// 'returned' (driver couldn't deliver, item going back to sender) and 'cancelled'
+// are terminal: nothing in this portal may confirm a step on a job in either state.
+export type JobStatus = 'pending' | 'client_pickup' | 'driver_pickup' | 'driver_delivery' | 'completed' | 'returned' | 'cancelled';
 
 // 'four_step' = legacy/default flow with sender + recipient OTP confirmation steps.
 // 'driver_only' = new jobs default to this; the driver confirms both pickup and
@@ -33,9 +35,17 @@ export interface Job {
   delivery_lng: number | null;
   driver_lat?: number | null;
   driver_lng?: number | null;
+  driver_id?: string | null;
+  driver_updated_at?: string | null;
+  company_name?: string | null;
+  cancellation_reason?: string | null;
+  scheduled_pickup_at?: string | null;
   driver_arrived_pickup_at?: string | null;
   sender_ready_at?: string | null;
   driver_arrived_delivery_at?: string | null;
+  // Only present if get_job_by_token returns them; the UI does not depend on these.
+  return_reason?: string | null;
+  returned_at?: string | null;
   created_at: string;
   driver_phone?: string;
   // OTP System Columns

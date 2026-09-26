@@ -21,6 +21,17 @@ async function startServer() {
     // Serve static files in production
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
+
+    // Driver web app (PWA), built into dist/driver-app by `npm run build:driver`.
+    // Shared with drivers as https://coc.nokael.com/driver-app/ — its routes live in
+    // the URL hash, so anything else under the prefix just gets its index.html.
+    const driverAppPath = path.join(distPath, 'driver-app');
+    app.get('/driver-app/*', (req, res) => {
+      // A missing file (e.g. an old hashed asset) is a real 404, never the HTML page.
+      if (path.extname(req.path)) return res.sendStatus(404);
+      res.set('Cache-Control', 'no-cache');
+      res.sendFile(path.join(driverAppPath, 'index.html'));
+    });
     
     // Handle SPA routing
     app.get('*', (req, res) => {

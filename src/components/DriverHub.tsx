@@ -16,6 +16,7 @@ import {
   MessageSquare,
   Package,
   Truck,
+  Undo2,
   WifiOff,
 } from 'lucide-react';
 
@@ -268,13 +269,16 @@ export default function DriverHub() {
   const senderReady = job[pickupConfig.partner_at_field] !== null;
   const deliveryDone = job[deliveryConfig.at_field] !== null;
 
-  const pickupStatus: CardStatus = pickupDone ? 'done' : senderReady ? 'ready' : 'waiting';
-  const deliveryStatus: CardStatus = deliveryDone ? 'done' : !pickupDone ? 'locked' : 'ready';
+  // Returned / cancelled jobs are terminal: keep confirmed legs visible as 'done',
+  // lock everything else so the driver can't open a confirmation step.
+  const jobClosed = job.status === 'returned' || job.status === 'cancelled';
+  const pickupStatus: CardStatus = pickupDone ? 'done' : jobClosed ? 'locked' : senderReady ? 'ready' : 'waiting';
+  const deliveryStatus: CardStatus = deliveryDone ? 'done' : jobClosed || !pickupDone ? 'locked' : 'ready';
 
   const jobComplete = job.status === 'completed';
 
   const goToPickup = () => {
-    if (!job.token_driver_pickup) return;
+    if (jobClosed || !job.token_driver_pickup) return;
     navigate(`/${job.token_driver_pickup}/driver-pickup`);
   };
   const goToDelivery = () => {
@@ -334,6 +338,20 @@ export default function DriverHub() {
           <p className="text-nokael-text-muted text-[13px] font-medium">{job.job_ref}</p>
         </div>
 
+        {jobClosed && (
+          <div className="bg-amber-50 p-5 rounded-2xl flex items-center gap-3.5 animate-in fade-in duration-700">
+            <div className="w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center shrink-0">
+              <Undo2 className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <h4 className="text-amber-900 font-semibold text-[14px]">
+                {job.status === 'returned' ? 'Job Returned' : 'Job Cancelled'}
+              </h4>
+              <p className="text-amber-700 text-[13px]">This job is closed. No further confirmations are possible. Contact dispatch if you have questions.</p>
+            </div>
+          </div>
+        )}
+
         {jobComplete && (
           <div className="bg-emerald-50 p-5 rounded-2xl flex items-center gap-3.5 animate-in fade-in duration-700">
             <div className="w-8 h-8 bg-emerald-500 rounded-full flex items-center justify-center shrink-0">
@@ -365,7 +383,7 @@ export default function DriverHub() {
           />
         </div>
 
-        {deliveryStatus === 'locked' && (
+        {deliveryStatus === 'locked' && !jobClosed && (
           <div className="flex items-center gap-2.5 px-3 text-nokael-text-muted">
             <Clock className="w-3.5 h-3.5 shrink-0" />
             <p className="text-[13px]">Delivery unlocks once collection is confirmed.</p>

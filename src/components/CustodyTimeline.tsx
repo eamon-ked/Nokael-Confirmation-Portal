@@ -46,7 +46,10 @@ function buildMilestones(job: Job): Milestone[] {
     {
       key: 'pickup_handover',
       label: 'Custody Transferred to Courier',
-      detail: job.client_pickup_at && job.driver_pickup_at
+      // driver_only jobs are a single handshake: the driver enters the sender's code.
+      detail: job.confirmation_mode === 'driver_only' && job.driver_pickup_at
+        ? "Verified with the sender's code"
+        : job.client_pickup_at && job.driver_pickup_at
         ? 'Verified by both sender and courier codes'
         : 'Awaiting two-sided code verification',
       timestamp: job.driver_pickup_at || job.client_pickup_at,
@@ -62,7 +65,9 @@ function buildMilestones(job: Job): Milestone[] {
     {
       key: 'delivery_handover',
       label: 'Custody Transferred to Recipient',
-      detail: job.client_delivery_at && job.driver_delivery_at
+      detail: job.confirmation_mode === 'driver_only' && job.driver_delivery_at
+        ? "Verified with the recipient's code"
+        : job.client_delivery_at && job.driver_delivery_at
         ? 'Verified by both courier and recipient codes'
         : 'Awaiting two-sided code verification',
       timestamp: job.client_delivery_at || job.driver_delivery_at,

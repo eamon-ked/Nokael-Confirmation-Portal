@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import ConfirmationPage from './components/ConfirmationPage';
 import DriverHub from './components/DriverHub';
 import DriverStatusPage from './components/DriverStatusPage';
+import TrackPage from './components/TrackPage';
 
 export default function App() {
   return (
@@ -10,6 +11,9 @@ export default function App() {
         <Routes>
           {/* Driver Hub — single link, both pickup + delivery for one job */}
           <Route path="/:token/driver-hub" element={<DriverHub />} />
+
+          {/* Client tracking — shared from the dashboard. ?for=recipient switches wording */}
+          <Route path="/:token/track" element={<TrackPage />} />
 
           {/* Driver Status — persistent per-driver link to toggle availability */}
           <Route path="/driver/:driverId/status" element={<DriverStatusPage />} />

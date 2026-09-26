@@ -35,7 +35,8 @@ import {
   ShieldCheck,
   ChevronRight,
   Info,
-  Truck
+  Truck,
+  Undo2
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Capacitor, registerPlugin } from '@capacitor/core';
@@ -552,6 +553,31 @@ function RecipientView({ job, step, config, online, handleReadyUpdate, handleRev
   );
 }
 
+// Shown to every role (sender, recipient, driver) when a job was returned or cancelled.
+// Deliberately generic: return_reason is internal and may not be exposed by the RPC.
+function ClosedJobNotice({ job }: { job: Job }) {
+  const returned = job.status === 'returned';
+  return (
+    <div className="nokael-card text-center space-y-4 py-10">
+      <div className="w-14 h-14 bg-amber-500 rounded-2xl flex items-center justify-center mx-auto">
+        <Undo2 className="w-7 h-7 text-white" />
+      </div>
+      <div className="space-y-1.5">
+        <h1 className="text-xl font-semibold text-nokael-primary">
+          {returned ? 'Delivery Not Completed' : 'Job Cancelled'}
+        </h1>
+        <p className="text-nokael-text-muted text-sm max-w-md mx-auto">
+          {returned
+            ? 'This package could not be delivered and is being returned. No further confirmation is needed on this link.'
+            : 'This job has been cancelled. No further confirmation is needed on this link.'}
+        </p>
+        <p className="text-nokael-text-muted text-[13px] font-medium">{job.job_ref}</p>
+      </div>
+      <a href={DISPATCH_WA_URL} className="text-nokael-accent font-medium text-sm underline underline-offset-4">Contact Nokael Dispatch</a>
+    </div>
+  );
+}
+
 function JobSummary({ job }: { job: Job }) {
   const getDuration = () => {
     if (!job.client_pickup_at || !job.client_delivery_at) return null;
@@ -967,7 +993,7 @@ export default function ConfirmationPage() {
 
   // Location tracking for drivers
   useEffect(() => {
-    if (!job || job.status === 'completed' || !config || config.role !== 'driver' || !online) return;
+    if (!job || job.status === 'completed' || job.status === 'returned' || job.status === 'cancelled' || !config || config.role !== 'driver' || !online) return;
     let watcherId: string | null = null;
     let fallbackWatchId: number | null = null;
 
@@ -1342,6 +1368,7 @@ export default function ConfirmationPage() {
 
   const renderRoleView = () => {
     if (job?.status === 'completed') return <JobSummary job={job} />;
+    if (job?.status === 'returned' || job?.status === 'cancelled') return <ClosedJobNotice job={job} />;
 
     // driver_only jobs skip this portal's entire OTP handshake — both the
     // client-pickup/client-delivery legs AND the driver-pickup/driver-delivery

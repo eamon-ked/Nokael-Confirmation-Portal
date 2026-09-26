@@ -1,0 +1,517 @@
+/* Nunito, the reference font — the same variable file the Android app bundles. */
+@font-face {
+  font-family: "Nunito";
+  src: url("/fonts/nunito.ttf") format("truetype");
+  font-weight: 200 1000;
+  font-display: swap;
+}
+
+/* The palette from the design reference (ui/theme/Color.kt). Screens only use these names. */
+:root {
+  --navy: #0f172a;
+  --slate: #1e293b;
+  --background: #f0f2f5;
+  --white: #ffffff;
+  --blue: #3b82f6;
+  --blue-soft: #93c5fd;
+  --blue-tint: #eff6ff;
+  --sky: #0ea5e9;
+  --sky-dark: #0284c7;
+  --green: #22c55e;
+  --green-dark: #16a34a;
+  --green-soft: #dcfce7;
+  --green-tint: #f0fdf4;
+  --orange: #f97316;
+  --orange-text: #fb923c;
+  --orange-tint: #fff7ed;
+  --purple: #8b5cf6;
+  --red: #ef4444;
+  --red-dark: #dc2626;
+  --red-tint: #fef2f2;
+  --red-soft: #fee2e2;
+  --rose: #f43f5e;
+  --rose-tint: #fff1f2;
+  --gray-900: #111827;
+  --gray-800: #1f2937;
+  --gray-700: #374151;
+  --gray-600: #4b5563;
+  --gray-500: #6b7280;
+  --gray-400: #9ca3af;
+  --slate-50: #f8fafc;
+  --slate-100: #f1f5f9;
+  --slate-200: #e2e8f0;
+  --slate-300: #cbd5e1;
+  --slate-400: #94a3b8;
+  --slate-500: #64748b;
+
+  --elev-1: 0 1px 3px rgba(15, 23, 42, 0.1);
+  --elev-3: 0 2px 5px rgba(15, 23, 42, 0.12);
+  --elev-4: 0 3px 8px rgba(15, 23, 42, 0.14);
+  --elev-8: 0 8px 20px rgba(15, 23, 42, 0.2);
+
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--navy);
+  font-family: "Nunito", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-weight: 700;
+  color: var(--gray-900);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+#root {
+  min-height: 100dvh;
+}
+
+/* The app is a phone UI; on a tablet or desktop it stays phone-width, centred. */
+.app {
+  position: relative;
+  max-width: 480px;
+  margin: 0 auto;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+}
+
+.screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+/* --- Type (NokaelType) -------------------------------------------------- */
+.label {
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+}
+
+/* --- ActionSurface: a tappable tile that shrinks slightly while pressed -- */
+.tap {
+  appearance: none;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: inherit;
+  background: none;
+  cursor: pointer;
+  display: block;
+  border-radius: 24px;
+  transition: transform 100ms ease-out, filter 100ms ease-out;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.tap:active:not(:disabled) {
+  transform: scale(0.96);
+  filter: brightness(0.96);
+}
+
+.tap:disabled {
+  cursor: default;
+}
+
+.tap:focus-visible,
+.field:focus-visible {
+  outline: 3px solid var(--blue-soft);
+  outline-offset: 2px;
+}
+
+.full {
+  width: 100%;
+}
+
+.center {
+  text-align: center;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+}
+
+.col {
+  display: flex;
+  flex-direction: column;
+}
+
+.emoji {
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+  line-height: 1.15;
+}
+
+.ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* --- BackCircleButton ---------------------------------------------------- */
+.back-circle {
+  border-radius: 50%;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.back-circle svg {
+  display: block;
+  fill: #fff;
+}
+
+/* --- Sign-in look: navy header, white rounded panel rising from the bottom */
+.dark-panel {
+  background: var(--navy);
+}
+
+.dark-panel__header {
+  padding-top: var(--safe-top);
+}
+
+.dark-panel__body {
+  flex: 1;
+  background: var(--white);
+  border-radius: 40px 40px 0 0;
+  padding: 32px 24px calc(32px + var(--safe-bottom));
+  display: flex;
+  flex-direction: column;
+}
+
+/* --- NokaelTextField ------------------------------------------------------ */
+.field {
+  width: 100%;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--gray-800);
+  background: var(--slate-50);
+  border: 1px solid var(--slate-200);
+  border-radius: 16px;
+  padding: 16px;
+  min-height: 56px;
+  outline: none;
+  caret-color: var(--blue);
+  transition: border-color 120ms;
+}
+
+.field::placeholder {
+  color: var(--slate-400);
+  font-weight: 700;
+}
+
+.field.has-value {
+  border-color: var(--blue);
+}
+
+.field:focus {
+  border: 2px solid var(--blue);
+  padding: 15px;
+}
+
+.field.error,
+.field.error:focus {
+  border: 2px solid var(--red);
+  padding: 15px;
+}
+
+.error-text {
+  color: var(--red);
+  font-size: 14px;
+  font-weight: 700;
+  margin-top: 8px;
+}
+
+/* --- Big solid button (Continue, Sign in, Confirm...) --------------------- */
+.btn {
+  width: 100%;
+  border-radius: 16px;
+  padding: 20px 16px;
+  font-size: 18px;
+  font-weight: 900;
+  text-align: center;
+  color: #fff;
+}
+
+/* --- Headers -------------------------------------------------------------- */
+.bar {
+  padding-top: var(--safe-top);
+}
+
+/* --- Cards ---------------------------------------------------------------- */
+.card {
+  background: var(--white);
+  border-radius: 24px;
+  box-shadow: var(--elev-1);
+  color: var(--gray-700);
+  width: 100%;
+}
+
+.chevron {
+  width: 24px;
+  height: 24px;
+  fill: var(--slate-400);
+  flex-shrink: 0;
+  transition: transform 200ms ease;
+}
+
+.chevron.open {
+  transform: rotate(180deg);
+}
+
+.collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 220ms ease;
+}
+
+.collapse.open {
+  grid-template-rows: 1fr;
+}
+
+.collapse > div {
+  overflow: hidden;
+}
+
+/* --- InfoBlock ------------------------------------------------------------ */
+.info-block {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  border-radius: 16px;
+  padding: 10px 12px;
+  width: 100%;
+}
+
+.info-block__caption {
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.info-block__text {
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 17px;
+  color: var(--gray-800);
+  overflow-wrap: anywhere;
+}
+
+/* --- OTP boxes & number pad ---------------------------------------------- */
+.otp-row {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+}
+
+.otp-box {
+  flex: 1;
+  height: 56px;
+  border-radius: 16px;
+  border: 2px solid var(--slate-300);
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: 900;
+  color: var(--slate);
+  min-width: 0;
+}
+
+.otp-row.shake {
+  animation: shake 360ms ease;
+}
+
+@keyframes shake {
+  20%,
+  60% {
+    transform: translateX(-6px);
+  }
+  40%,
+  80% {
+    transform: translateX(6px);
+  }
+}
+
+.pad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  width: 100%;
+}
+
+.pad-key {
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  color: var(--slate);
+}
+
+.pad-key--outlined {
+  background: var(--slate-50);
+  border: 2px solid var(--slate-200);
+}
+
+.pad-key--elevated {
+  background: #fff;
+  box-shadow: var(--elev-3);
+}
+
+.pad-key--delete {
+  background: var(--red-soft);
+}
+
+.pad-key--delete svg {
+  fill: var(--red);
+}
+
+/* --- Bottom sheet --------------------------------------------------------- */
+.scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.32);
+  z-index: 40;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: fade-in 180ms ease-out;
+}
+
+.sheet {
+  width: 100%;
+  max-width: 480px;
+  background: #fff;
+  border-radius: 32px 32px 0 0;
+  padding: 0 24px calc(24px + var(--safe-bottom));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: slide-up 240ms cubic-bezier(0.2, 0.9, 0.3, 1);
+  max-height: 92dvh;
+  overflow-y: auto;
+}
+
+.sheet__handle {
+  width: 40px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--slate-200);
+  margin: 12px 0 20px;
+  flex-shrink: 0;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes slide-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+/* --- Toast (Android Toast) ----------------------------------------------- */
+.toast-host {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(48px + var(--safe-bottom));
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 60;
+  padding: 0 24px;
+}
+
+.toast {
+  max-width: 420px;
+  background: rgba(30, 41, 59, 0.94);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 20px;
+  padding: 12px 18px;
+  border-radius: 20px;
+  box-shadow: var(--elev-8);
+  text-align: center;
+  animation: fade-in 160ms ease-out;
+}
+
+/* --- Connectivity strip (web only: tells the driver they're working offline) */
+.net-strip {
+  background: var(--orange);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+  text-align: center;
+  padding: 6px 12px;
+}
+
+/* --- Spinner (CircularProgressIndicator) --------------------------------- */
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(255, 255, 255, 0.25);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 900ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* --- Online toggle -------------------------------------------------------- */
+.toggle-track {
+  width: 46px;
+  height: 26px;
+  border-radius: 13px;
+  padding: 3px;
+  transition: background 200ms;
+}
+
+.toggle-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 200ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
+}

@@ -1,5 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
+/* The driver web app (driver-app/) is a separate build with its own styles. */
+@source not "../driver-app";
 
 @theme {
   /* Apple-style stack: native SF Pro on Apple devices, Inter as the

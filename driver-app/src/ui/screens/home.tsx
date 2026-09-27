@@ -8,7 +8,7 @@ import { useNav } from "../nav";
 const LOCATION_NEEDED = "Precise location is needed to go online. Allow location for this site in your browser settings.";
 
 export function HomeScreen() {
-  useThemeColor("#1E293B");
+  useThemeColor("#26323F");
   const nav = useNav();
   const driver = useStore(container.session.driver);
   const isOnline = useStore(container.session.isOnline);

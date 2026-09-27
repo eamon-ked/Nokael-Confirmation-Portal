@@ -11,7 +11,7 @@ const MAX_REASON_LENGTH = 300;
 
 /** "Return to sender?" confirmation. A reason is required before dispatch accepts the return. */
 export function ReturnScreen({ jobId }: { jobId: string }) {
-  useThemeColor("#F0F2F5");
+  useThemeColor("#F7F8FA");
   const nav = useNav();
   const job = useStore(container.jobs.jobs).find((j) => j.id === jobId);
   const [reason, setReason] = useState("");
@@ -129,7 +129,7 @@ const RESULT_CONTENT: Record<JobOutcome, { emoji: string; background: string; th
   CANCELLED: {
     emoji: "🚫",
     background: "var(--slate)",
-    theme: "#1E293B",
+    theme: "#26323F",
     title: "Job Cancelled",
     message: "Dispatch has cancelled this job. No further action is needed from you.",
     buttonColor: "var(--slate)",

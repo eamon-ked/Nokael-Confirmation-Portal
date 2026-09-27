@@ -53,9 +53,7 @@ cp .env.example .env    # same values as the Android local.properties
 npm run dev             # http://localhost:5180/driver-app/
 ```
 
-With no `VITE_SUPABASE_ANON_KEY` the app runs on the in-memory **demo backend**
-(purple "DEMO MODE" strip, demo accounts on the login screen, hand-off code `482916`),
-exactly like the Android debug build.
+The app always talks to the live Supabase backend; `VITE_SUPABASE_ANON_KEY` must be set.
 
 ## Deploy (Render)
 
@@ -65,7 +63,7 @@ required on the Render service:
 
 - `VITE_DISPATCH_PHONE` — the number behind Call / Message dispatch.
 
-The driver build refuses to run on the demo backend or without a dispatch number (the
+The driver build refuses to build without the anon key or a dispatch number (the
 same rule as the Android release build), so a missing variable fails the deploy
 instead of shipping a broken app.
 

@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { AppConfig } from "../../logic/config";
 import { container, LoginDraft } from "../../logic/container";
-import { DEMO_ACCOUNTS } from "../../logic/fake";
 import { BackCircleButton, DarkPanelScaffold, Emoji, ExternalActions, SectionLabel, Tap, toast, useThemeColor } from "../components";
 import { useNav, type Route } from "../nav";
 
@@ -11,7 +10,7 @@ import { useNav, type Route } from "../nav";
  * rather than dropping the driver on the login screen over a signal blip.
  * ========================================================================= */
 export function StartupScreen({ resumeTo }: { resumeTo: Route[] }) {
-  useThemeColor("#0F172A");
+  useThemeColor("#1D2734");
   const nav = useNav();
   const [attempt, setAttempt] = useState(0);
   const [unreachable, setUnreachable] = useState(false);
@@ -54,7 +53,7 @@ export function StartupScreen({ resumeTo }: { resumeTo: Route[] }) {
           <div className="center" style={{ fontSize: 16, color: "rgba(255,255,255,0.8)", marginBottom: 24 }}>
             Can't reach the server. Check your connection and try again.
           </div>
-          <Tap onClick={() => setAttempt((n) => n + 1)} color="var(--blue)" radius={16} className="full">
+          <Tap onClick={() => setAttempt((n) => n + 1)} color="var(--neon)" contentColor="var(--on-neon)" radius={16} className="full">
             <div className="center" style={{ fontSize: 18, fontWeight: 900, padding: "18px 0" }}>
               Try again
             </div>
@@ -86,11 +85,10 @@ export function StartupScreen({ resumeTo }: { resumeTo: Route[] }) {
  * and never a "no account found" answer. Credentials are checked on screen 2.
  * ========================================================================= */
 export function LoginScreen() {
-  useThemeColor("#0F172A");
+  useThemeColor("#1D2734");
   const nav = useNav();
   const [identifier, setIdentifier] = useState(container.loginDraft.identifier);
   const [error, setError] = useState<string | null>(null);
-  const demoDrivers = AppConfig.showDemoHints ? DEMO_ACCOUNTS.map((a) => a.driver) : [];
   const canContinue = identifier.trim() !== "";
 
   const onContinue = () => {
@@ -145,34 +143,11 @@ export function LoginScreen() {
           enterKeyHint="go"
         />
         {error && <div className="error-text">❌ {error}</div>}
-        <Tap onClick={onContinue} disabled={!canContinue} color={canContinue ? "var(--blue)" : "rgba(59,130,246,0.5)"} radius={16} className="btn" style={{ marginTop: 24 }}>
+        <Tap onClick={onContinue} disabled={!canContinue} color={canContinue ? "var(--neon)" : "var(--neon-disabled)"} contentColor="var(--on-neon)" radius={16} className="btn" style={{ marginTop: 24 }}>
           Continue →
         </Tap>
         <button type="submit" hidden />
       </form>
-      {demoDrivers.length > 0 && (
-        <div style={{ marginTop: 32, background: "var(--slate-100)", borderRadius: 16, padding: 16 }}>
-          <div style={{ fontSize: 12, fontWeight: 900, color: "var(--gray-400)", marginBottom: 8 }}>DEMO ACCOUNTS</div>
-          {demoDrivers.map((driver) => (
-            <Tap
-              key={driver.id}
-              onClick={() => {
-                setIdentifier(driver.phone);
-                setError(null);
-              }}
-              color="transparent"
-              contentColor="var(--gray-700)"
-              radius={12}
-              className="full"
-            >
-              <div className="row" style={{ gap: 8, padding: "8px 12px" }}>
-                <span style={{ fontSize: 14, fontWeight: 900, color: "var(--gray-700)" }}>{driver.name}</span>
-                <span style={{ fontSize: 12, color: "var(--gray-400)" }}>{driver.phone}</span>
-              </div>
-            </Tap>
-          ))}
-        </div>
-      )}
       <InstallHint />
     </DarkPanelScaffold>
   );
@@ -183,7 +158,7 @@ export function LoginScreen() {
  * credentials. Every wrong-credentials outcome shows the same message.
  * ========================================================================= */
 export function VerifyScreen() {
-  useThemeColor("#0F172A");
+  useThemeColor("#1D2734");
   const nav = useNav();
   const identifier = container.loginDraft.identifier;
   const [password, setPassword] = useState("");
@@ -210,13 +185,6 @@ export function VerifyScreen() {
     }, 1000);
     return () => clearTimeout(timer);
   }, [lockedSeconds]);
-
-  const demoPassword = AppConfig.showDemoHints
-    ? DEMO_ACCOUNTS.find((a) => {
-        const cleaned = identifier.replace(/ /g, "");
-        return a.driver.phone === cleaned || a.driver.email.toLowerCase() === cleaned.toLowerCase();
-      })?.password
-    : undefined;
 
   const canSubmit = password !== "" && !checking && lockedSeconds === 0;
 
@@ -293,17 +261,11 @@ export function VerifyScreen() {
           autoFocus
         />
         {error && <div className="error-text">❌ {error}</div>}
-        <Tap onClick={() => void onSubmit()} disabled={!canSubmit} color={password === "" ? "rgba(59,130,246,0.5)" : "var(--blue)"} radius={16} className="btn" style={{ marginTop: 24 }}>
+        <Tap onClick={() => void onSubmit()} disabled={!canSubmit} color={password === "" ? "var(--neon-disabled)" : "var(--neon)"} contentColor="var(--on-neon)" radius={16} className="btn" style={{ marginTop: 24 }}>
           {checking ? "Checking…" : "Sign In →"}
         </Tap>
         <button type="submit" hidden />
       </form>
-      {demoPassword && (
-        <div className="row" style={{ marginTop: 16, background: "var(--slate-50)", borderRadius: 12, padding: 12, fontSize: 12 }}>
-          <span style={{ color: "var(--gray-400)" }}>Demo:&nbsp;</span>
-          <span style={{ fontWeight: 900, color: "var(--gray-600)" }}>{demoPassword}</span>
-        </div>
-      )}
       <div className="row" style={{ justifyContent: "center", marginTop: 20 }}>
         <Tap
           onClick={() => {

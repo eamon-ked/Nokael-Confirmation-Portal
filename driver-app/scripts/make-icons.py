@@ -7,7 +7,7 @@ import struct
 import zlib
 from pathlib import Path
 
-NAVY = (0x0F, 0x17, 0x2A)
+NAVY = (0x1D, 0x27, 0x34)
 GREEN = (0x22, 0xC5, 0x5E)
 # M34,32 h9.5 l21,28.5 V32 H74 v44 h-9.5 l-21,-28.5 V76 H34 z
 GLYPH = [(34, 32), (43.5, 32), (64.5, 60.5), (64.5, 32), (74, 32), (74, 76), (64.5, 76), (43.5, 47.5), (43.5, 76), (34, 76)]

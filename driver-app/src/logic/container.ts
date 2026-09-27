@@ -1,11 +1,9 @@
 /**
  * The one place that decides which implementation backs each contract — the
- * web version of the Android `AppContainer`. `AppConfig.useFakeBackend`
- * switches every screen between in-memory demo data and the real Supabase
- * calls; no screen needs to know which one is active.
+ * web version of the Android `AppContainer`. Every repository talks to the
+ * Nokael Supabase backend; no screen constructs its own dependencies.
  */
 import { AppConfig } from "./config";
-import { FakeAuthRepository, FakeJobRepository, LoggingDispatchLocationRepository } from "./fake";
 import { LiveLocationBroadcaster, LocationPermissionState } from "./location";
 import type { Driver } from "./model";
 import {
@@ -92,18 +90,12 @@ class AppContainer {
   private syncBackoffMs = SYNC_BASE_MS;
 
   constructor() {
-    if (AppConfig.useFakeBackend) {
-      this.auth = new FakeAuthRepository();
-      this.jobs = new FakeJobRepository();
-      this.dispatchLocation = new LoggingDispatchLocationRepository();
-    } else {
-      const tokens = new SessionTokens();
-      const rpc = new SupabaseRpcClient(AppConfig.supabaseUrl, AppConfig.supabaseAnonKey);
-      const sessionRpc = new SessionRpc(rpc, tokens, () => this.expireLocally());
-      this.auth = new RemoteAuthRepository(rpc, sessionRpc, tokens);
-      this.jobs = new RemoteJobRepository(sessionRpc, () => this.scheduleArrivalSync(true));
-      this.dispatchLocation = new RemoteDispatchLocationRepository(sessionRpc);
-    }
+    const tokens = new SessionTokens();
+    const rpc = new SupabaseRpcClient(AppConfig.supabaseUrl, AppConfig.supabaseAnonKey);
+    const sessionRpc = new SessionRpc(rpc, tokens, () => this.expireLocally());
+    this.auth = new RemoteAuthRepository(rpc, sessionRpc, tokens);
+    this.jobs = new RemoteJobRepository(sessionRpc, () => this.scheduleArrivalSync(true));
+    this.dispatchLocation = new RemoteDispatchLocationRepository(sessionRpc);
     this.broadcaster = new LiveLocationBroadcaster(this.dispatchLocation);
   }
 

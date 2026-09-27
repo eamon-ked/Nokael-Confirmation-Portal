@@ -62,7 +62,7 @@ function actionStyle(action: PrimaryAction, job: Job) {
  * and remarks.
  */
 export function JobScreen({ jobId }: { jobId: string }) {
-  useThemeColor("#1E293B");
+  useThemeColor("#26323F");
   const nav = useNav();
   const driver = useStore(container.session.driver);
   const job = useStore(container.jobs.jobs).find((j) => j.id === jobId) ?? null;

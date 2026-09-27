@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { AppConfig } from "./logic/config";
 import { container } from "./logic/container";
 import { useStore } from "./logic/store";
 import { ToastHost } from "./ui/components";
@@ -65,7 +64,7 @@ function Screens({ route }: { route: Route }) {
   }
 }
 
-/** Web only: a thin strip when the device has no connection, or when running the demo backend. */
+/** Web only: a thin strip when the device has no connection. */
 function NetworkStrip() {
   const [online, setOnline] = useState(navigator.onLine);
   useEffect(() => {
@@ -78,13 +77,6 @@ function NetworkStrip() {
       window.removeEventListener("offline", off);
     };
   }, []);
-  if (AppConfig.useFakeBackend) {
-    return (
-      <div className="net-strip" style={{ background: "var(--purple)", paddingTop: "calc(6px + var(--safe-top))" }}>
-        DEMO MODE · sample jobs, nothing is sent to dispatch
-      </div>
-    );
-  }
   if (online) return null;
   return (
     <div className="net-strip" style={{ paddingTop: "calc(6px + var(--safe-top))" }} role="status">

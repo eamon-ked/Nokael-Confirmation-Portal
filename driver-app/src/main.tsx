@@ -6,7 +6,7 @@ import "./styles.css";
 
 container.start();
 
-// Dev only: lets you poke the app from the console (e.g. simulate dispatch cancelling a demo job).
+// Dev only: lets you poke the app from the console .
 if (import.meta.env.DEV) (window as unknown as { nokael: typeof container }).nokael = container;
 
 createRoot(document.getElementById("root")!).render(

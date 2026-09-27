@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { AppConfig } from "../../logic/config";
 import { container } from "../../logic/container";
-import { HANDOFF_CODE } from "../../logic/fake";
 import type { HandoffKind } from "../../logic/model";
 import { delay, useStore } from "../../logic/store";
 import { BackCircleButton, Emoji, ExternalActions, NumberPad, OTP_LENGTH, OtpDigitRow, Tap, toast, useKeypadKeys, useThemeColor } from "../components";
@@ -35,8 +34,8 @@ const ERROR_VISIBLE_MS = 1_500;
 export function HandoffOtpScreen({ jobId, kind }: { jobId: string; kind: HandoffKind }) {
   const isPickup = kind === "PICKUP";
   const accent = isPickup ? "var(--green)" : "var(--blue)";
-  const accentTint = isPickup ? "rgba(34,197,94,0.1)" : "rgba(59,130,246,0.1)";
-  useThemeColor(isPickup ? "#22C55E" : "#3B82F6");
+  const accentTint = isPickup ? "rgba(34,197,94,0.1)" : "rgba(45,125,255,0.1)";
+  useThemeColor(isPickup ? "#22C55E" : "#2D7DFF");
 
   const nav = useNav();
   const job = useStore(container.jobs.jobs).find((j) => j.id === jobId);
@@ -132,12 +131,6 @@ export function HandoffOtpScreen({ jobId, kind }: { jobId: string; kind: Handoff
           <div className="center" style={{ fontSize: 16, color: "var(--gray-500)", marginBottom: 16 }}>
             Enter the 6-digit code from the client
           </div>
-          {AppConfig.showDemoHints && (
-            <div className="row" style={{ marginBottom: 24, background: "#fff", borderRadius: 12, padding: "8px 16px", fontSize: 12 }}>
-              <span style={{ color: "var(--gray-400)" }}>Demo code:&nbsp;</span>
-              <span style={{ fontWeight: 900, color: "var(--gray-700)" }}>{HANDOFF_CODE}</span>
-            </div>
-          )}
           <OtpDigitRow digits={entry.digits} showError={entry.showError} accent={accent} accentTint={accentTint} style={{ marginBottom: 24 }} />
           {entry.showError && <div style={{ fontSize: 18, fontWeight: 900, color: "var(--red)", marginBottom: 16 }}>❌ Wrong code — try again</div>}
           {/* The request itself failed (not a typo), so say so instead of silently clearing the digits. */}

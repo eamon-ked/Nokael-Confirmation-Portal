@@ -6,18 +6,23 @@
   font-display: swap;
 }
 
-/* The palette from the design reference (ui/theme/Color.kt). Screens only use these names. */
+/* The Nokael brand palette (ui/theme/Color.kt; the site's --nk-* tokens in
+   nokael-concierge-V2/src/index.css). Screens only use these names. */
 :root {
-  --navy: #0f172a;
-  --slate: #1e293b;
-  --background: #f0f2f5;
+  --navy: #1d2734; /* --nk-bg (dark) */
+  --slate: #26323f;
+  --background: #f7f8fa; /* --nk-bg (light) */
   --white: #ffffff;
-  --blue: #3b82f6;
-  --blue-soft: #93c5fd;
-  --blue-tint: #eff6ff;
+  /* Brand accent: neon green with dark text on top, as on the site's primary button */
+  --neon: #22c55e; /* --nk-neon */
+  --on-neon: var(--navy); /* --nk-on-neon */
+  --neon-disabled: rgba(34, 197, 94, 0.5);
+  --blue: #2d7dff; /* --nk-blue */
+  --blue-soft: #96beff;
+  --blue-tint: #eef4ff;
   --sky: #0ea5e9;
   --sky-dark: #0284c7;
-  --green: #22c55e;
+  --green: var(--neon);
   --green-dark: #16a34a;
   --green-soft: #dcfce7;
   --green-tint: #f0fdf4;
@@ -44,10 +49,10 @@
   --slate-400: #94a3b8;
   --slate-500: #64748b;
 
-  --elev-1: 0 1px 3px rgba(15, 23, 42, 0.1);
-  --elev-3: 0 2px 5px rgba(15, 23, 42, 0.12);
-  --elev-4: 0 3px 8px rgba(15, 23, 42, 0.14);
-  --elev-8: 0 8px 20px rgba(15, 23, 42, 0.2);
+  --elev-1: 0 1px 3px rgba(29, 39, 52, 0.1);
+  --elev-3: 0 2px 5px rgba(29, 39, 52, 0.12);
+  --elev-4: 0 3px 8px rgba(29, 39, 52, 0.14);
+  --elev-8: 0 8px 20px rgba(29, 39, 52, 0.2);
 
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -479,7 +484,7 @@ body {
   width: 40px;
   height: 40px;
   border: 4px solid rgba(255, 255, 255, 0.25);
-  border-top-color: #fff;
+  border-top-color: var(--neon);
   border-radius: 50%;
   animation: spin 900ms linear infinite;
 }

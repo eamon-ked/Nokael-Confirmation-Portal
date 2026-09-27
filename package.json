@@ -6,11 +6,12 @@
   "scripts": {
     "dev": "tsx server.ts",
     "start": "tsx server.ts",
-    "build": "vite build && npm run build:driver",
+    "build": "vite build && npm run build:driver && npm run build:portal",
     "build:driver": "npm --prefix driver-app ci --include=dev && npm --prefix driver-app run build -- --outDir ../dist/driver-app --emptyOutDir",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "build:portal": "npm --prefix client-portal ci --include=dev && npm --prefix client-portal run build -- --outDir ../dist/portal --emptyOutDir"
   },
   "dependencies": {
     "@capacitor-community/background-geolocation": "^1.2.26",

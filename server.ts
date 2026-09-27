@@ -32,6 +32,17 @@ async function startServer() {
       res.set('Cache-Control', 'no-cache');
       res.sendFile(path.join(driverAppPath, 'index.html'));
     });
+
+    // Client dashboard, built into dist/portal by `npm run build:portal` (own codebase
+    // in client-portal/). Registered before the SPA catch-all so /portal/* never falls
+    // through to the confirmation app's /:token/:step route.
+    const portalPath = path.join(distPath, 'portal');
+    app.use('/portal', express.static(portalPath, { index: false }));
+    app.get(['/portal', '/portal/*'], (req, res) => {
+      if (path.extname(req.path)) return res.sendStatus(404);
+      res.set('Cache-Control', 'no-cache');
+      res.sendFile(path.join(portalPath, 'index.html'));
+    });
     
     // Handle SPA routing
     app.get('*', (req, res) => {

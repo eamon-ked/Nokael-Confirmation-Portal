@@ -3,7 +3,7 @@ import { AppConfig } from "../../logic/config";
 import { container } from "../../logic/container";
 import { JobStageMachine, type PrimaryAction } from "../../logic/jobStageMachine";
 import { currentLocation } from "../../logic/location";
-import { cargo, clientName, clientPhone, hasPackage, isBeforePickup, scheduledDate, scheduledTime, type HandoffKind, type Job } from "../../logic/model";
+import { cargo, clientName, clientPhone, hasPackage, isBeforePickup, scheduledDate, scheduledTime, type GeoPoint, type HandoffKind, type Job, type Place } from "../../logic/model";
 import { useStore } from "../../logic/store";
 import { BackCircleButton, ConfirmSheet, DispatchSheet, Emoji, ExternalActions, Icon, InfoBlock, Tap, toast, useThemeColor } from "../components";
 import { useNav } from "../nav";
@@ -11,8 +11,31 @@ import { useNav } from "../nav";
 const ARRIVAL_FIX_TIMEOUT_MS = 8_000;
 const REMARK_DEBOUNCE_MS = 800;
 const MAX_REMARK_LENGTH = 1_000;
+/** Generous, so big compounds and slightly-off pins don't trip the "not there yet" warning. */
+const FAR_FROM_STOP_M = 1_000;
 
-type JobDialog = { type: "confirm_arrival"; kind: HandoffKind } | { type: "dispatch" } | null;
+// distanceMeters: how far GPS puts the driver from the stop's pin, once known;
+// undefined while locating, or when the stop has no pin or there's no fix.
+type JobDialog = { type: "confirm_arrival"; kind: HandoffKind; distanceMeters?: number } | { type: "dispatch" } | null;
+
+/** Great-circle (haversine) distance in metres. */
+function distanceMeters(a: GeoPoint, b: GeoPoint): number {
+  const rad = (d: number) => (d * Math.PI) / 180;
+  const dLat = rad(b.latitude - a.latitude);
+  const dLng = rad(b.longitude - a.longitude);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.latitude)) * Math.cos(rad(b.latitude)) * Math.sin(dLng / 2) ** 2;
+  return 6_371_000 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+/** "850 m", "1.4 km", "12 km". */
+function formatDistance(meters: number): string {
+  if (meters < 1_000) return `${Math.round(meters)} m`;
+  if (meters < 10_000) return `${(meters / 1_000).toFixed(1)} km`;
+  return `${Math.round(meters / 1_000)} km`;
+}
+
+const pinOf = (place: Place): GeoPoint | null =>
+  place.latitude != null && place.longitude != null ? { latitude: place.latitude, longitude: place.longitude } : null;
 
 interface JobLocalState {
   isProgressExpanded: boolean;
@@ -44,11 +67,11 @@ function saveRemark(jobId: string, text: string): Promise<void> {
 function actionStyle(action: PrimaryAction, job: Job) {
   switch (action) {
     case "ARRIVED_AT_PICKUP":
-      return { color: "var(--sky)", emoji: "📍", title: "I AM HERE", subtitle: `Tap when you arrive at ${job.pickup.shortName}` };
+      return { color: "var(--sky)", emoji: "📍", title: "I HAVE ARRIVED", subtitle: `Tap when you arrive at ${job.pickup.shortName}` };
     case "PICK_UP":
       return { color: "var(--green)", emoji: "📦", title: "PICK UP", subtitle: `${job.pickup.shortName} · Enter OTP to confirm` };
     case "ARRIVED_AT_DROPOFF":
-      return { color: "var(--sky)", emoji: "📍", title: "I AM HERE", subtitle: `Tap when you arrive at ${job.dropoff.shortName}` };
+      return { color: "var(--sky)", emoji: "📍", title: "I HAVE ARRIVED", subtitle: `Tap when you arrive at ${job.dropoff.shortName}` };
     case "DROP_OFF":
       return { color: "var(--blue)", emoji: "🏁", title: "DROP OFF", subtitle: `${job.dropoff.shortName} · Enter OTP to confirm` };
     case "COMPLETE_JOB":
@@ -58,8 +81,10 @@ function actionStyle(action: PrimaryAction, job: Job) {
 
 /**
  * The working screen for a single job: job details on top, the next-step
- * button (I am here → Pick up → Drop off), directions, call client, dispatch,
- * and remarks.
+ * button (I have arrived → Pick up → Drop off), directions, call client, dispatch,
+ * and remarks. On the drive to drop-off, NAVIGATE leads and the arrival button
+ * drops below it in a smaller size, so a driver who just confirmed pickup doesn't
+ * tap "arrived" out of habit.
  */
 export function JobScreen({ jobId }: { jobId: string }) {
   useThemeColor("#26323F");
@@ -74,6 +99,25 @@ export function JobScreen({ jobId }: { jobId: string }) {
 
   const [dialog, setDialog] = useState<JobDialog>(null);
   const [arriving, setArriving] = useState(false);
+  // GPS fix taken when the arrival sheet opens; reused for the arrival record.
+  const arrivalFix = useRef<Promise<GeoPoint | null> | null>(null);
+
+  /**
+   * Opens the "Arrived?" sheet and, in the background, measures how far the
+   * driver is from the stop's pin, so the sheet can warn when they're clearly
+   * not there yet. No pin or no fix: the sheet just stays as it is.
+   */
+  const openArrival = (kind: HandoffKind) => {
+    setDialog({ type: "confirm_arrival", kind });
+    const fix = currentLocation(ARRIVAL_FIX_TIMEOUT_MS);
+    arrivalFix.current = fix;
+    const stop = job ? pinOf(kind === "PICKUP" ? job.pickup : job.dropoff) : null;
+    void fix.then((point) => {
+      if (!point || !stop || !mounted.current || arrivalFix.current !== fix) return;
+      const meters = distanceMeters(point, stop);
+      setDialog((d) => (d?.type === "confirm_arrival" && d.kind === kind ? { ...d, distanceMeters: meters } : d));
+    });
+  };
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
@@ -138,9 +182,9 @@ export function JobScreen({ jobId }: { jobId: string }) {
     }
     switch (action) {
       case "ARRIVED_AT_PICKUP":
-        return setDialog({ type: "confirm_arrival", kind: "PICKUP" });
+        return openArrival("PICKUP");
       case "ARRIVED_AT_DROPOFF":
-        return setDialog({ type: "confirm_arrival", kind: "DROPOFF" });
+        return openArrival("DROPOFF");
       case "PICK_UP":
         return nav.push({ name: "otp", jobId, kind: "PICKUP" });
       case "DROP_OFF":
@@ -160,7 +204,9 @@ export function JobScreen({ jobId }: { jobId: string }) {
     setDialog(null);
     setArriving(true);
     // A GPS fix can hang indefinitely (indoors, basement car park); never let that stall the driver.
-    const location = await currentLocation(ARRIVAL_FIX_TIMEOUT_MS);
+    // Reuse the fix taken when the sheet opened; otherwise try once more.
+    const location = (await arrivalFix.current) ?? (await currentLocation(ARRIVAL_FIX_TIMEOUT_MS));
+    arrivalFix.current = null;
     const result = await container.jobs.confirmArrival(jobId, { kind, location, timestampMillis: Date.now() });
     if (mounted.current) setArriving(false);
     if (result === "STALE") toast("This job has changed. Refreshed.", true);
@@ -177,8 +223,17 @@ export function JobScreen({ jobId }: { jobId: string }) {
         <div className="col" style={{ flex: 1, gap: 12, padding: "16px 16px calc(16px + var(--safe-bottom))" }}>
           <ProgressCard job={job} expanded={local.isProgressExpanded} onToggle={() => setLocal((l) => ({ ...l, isProgressExpanded: !l.isProgressExpanded }))} />
           <DetailsCard job={job} expanded={local.isDetailsExpanded} onToggle={() => setLocal((l) => ({ ...l, isDetailsExpanded: !l.isDetailsExpanded }))} />
-          <PrimaryActionButton job={job} busy={arriving} onClick={onPrimaryAction} />
-          <NavigateButton job={job} />
+          {JobStageMachine.primaryActionFor(job.stage) === "ARRIVED_AT_DROPOFF" ? (
+            <>
+              <NavigateButton job={job} hero note="✅ Package picked up" />
+              <PrimaryActionButton job={job} busy={arriving} onClick={onPrimaryAction} compact />
+            </>
+          ) : (
+            <>
+              <PrimaryActionButton job={job} busy={arriving} onClick={onPrimaryAction} />
+              <NavigateButton job={job} />
+            </>
+          )}
           <div className="row" style={{ gap: 12 }}>
             <QuickActionTile
               emoji="📞"
@@ -208,12 +263,27 @@ export function JobScreen({ jobId }: { jobId: string }) {
       {dialog?.type === "confirm_arrival" && job && (() => {
         const isPickup = dialog.kind === "PICKUP";
         const place = isPickup ? job.pickup : job.dropoff;
+        const distance = dialog.distanceMeters;
+        if (distance != null && distance > FAR_FROM_STOP_M) {
+          // GPS says they're clearly not there yet; still let them confirm (GPS can drift).
+          return (
+            <ConfirmSheet
+              emoji="⚠️"
+              title={`You're ${formatDistance(distance)} away`}
+              message={`Your location shows you about ${formatDistance(distance)} from ${place.shortName}. Only confirm once you've actually arrived.`}
+              confirmLabel="I Have Arrived Anyway"
+              confirmColor="var(--orange)"
+              onConfirm={() => void onConfirmArrival()}
+              onDismiss={() => setDialog(null)}
+            />
+          );
+        }
         return (
           <ConfirmSheet
             emoji="📍"
             title={`Arrived at ${place.shortName}?`}
             message={`Please confirm you have reached the ${isPickup ? "pickup" : "drop-off"} location at ${place.address}.`}
-            confirmLabel="Yes, I'm Here"
+            confirmLabel="Yes, I Have Arrived"
             confirmColor="var(--sky)"
             onConfirm={() => void onConfirmArrival()}
             onDismiss={() => setDialog(null)}
@@ -374,23 +444,51 @@ function DetailsCard({ job, expanded, onToggle }: { job: Job; expanded: boolean;
 }
 
 /** The one big button for whatever the driver should do next. */
-function PrimaryActionButton({ job, busy, onClick }: { job: Job; busy: boolean; onClick: () => void }) {
+function PrimaryActionButton({ job, busy, onClick, compact = false }: { job: Job; busy: boolean; onClick: () => void; compact?: boolean }) {
   const style = actionStyle(JobStageMachine.primaryActionFor(job.stage), job);
+  const subtitle = busy ? "Recording your arrival…" : style.subtitle;
+  // Compact: a regular-sized row, used when another button leads the screen.
+  if (compact) {
+    return (
+      <Tap onClick={onClick} color={style.color} elevation={4} className="full" disabled={busy} style={{ opacity: busy ? 0.75 : 1 }}>
+        <div className="row" style={{ justifyContent: "center", gap: 16, padding: "20px 16px" }}>
+          <Emoji size={36}>{style.emoji}</Emoji>
+          <div className="col" style={{ minWidth: 0 }}>
+            <span style={{ fontSize: 18, fontWeight: 900 }}>{style.title}</span>
+            <span style={{ fontSize: 14, color: "rgba(255,255,255,0.8)" }}>{subtitle}</span>
+          </div>
+        </div>
+      </Tap>
+    );
+  }
   return (
     <Tap onClick={onClick} color={style.color} elevation={8} className="full" disabled={busy} style={{ opacity: busy ? 0.75 : 1 }}>
       <div className="col" style={{ alignItems: "center", gap: 12, padding: "40px 16px" }}>
         <Emoji size={60}>{style.emoji}</Emoji>
         <span style={{ fontSize: 24, fontWeight: 900 }}>{style.title}</span>
         <span className="center" style={{ fontSize: 14, color: "rgba(255,255,255,0.7)" }}>
-          {busy ? "Recording your arrival…" : style.subtitle}
+          {subtitle}
         </span>
       </div>
     </Tap>
   );
 }
 
-function NavigateButton({ job }: { job: Job }) {
+function NavigateButton({ job, hero = false, note }: { job: Job; hero?: boolean; note?: string }) {
   const target = isBeforePickup(job.stage) ? job.pickup : job.dropoff;
+  // Hero: the big leading button, sized like PrimaryActionButton, for the drive to drop-off.
+  if (hero) {
+    return (
+      <Tap onClick={() => ExternalActions.navigate(target.address)} color="var(--orange)" elevation={8} className="full">
+        <div className="col" style={{ alignItems: "center", gap: 10, padding: "32px 16px" }}>
+          {note && <span style={{ fontSize: 14, fontWeight: 700, color: "rgba(255,255,255,0.9)" }}>{note}</span>}
+          <Emoji size={52}>🗺️</Emoji>
+          <span style={{ fontSize: 24, fontWeight: 900 }}>NAVIGATE</span>
+          <span className="center" style={{ fontSize: 14, color: "rgba(255,255,255,0.8)" }}>→ {target.shortName}</span>
+        </div>
+      </Tap>
+    );
+  }
   return (
     <Tap onClick={() => ExternalActions.navigate(target.address)} color="var(--orange)" elevation={4} className="full">
       <div className="row" style={{ justifyContent: "center", gap: 16, padding: "20px 0" }}>

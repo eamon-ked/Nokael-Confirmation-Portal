@@ -51,6 +51,8 @@ const driverIcon = L.divIcon({
 
 interface DriverMapProps {
   job: Job;
+  /** Minutes to the driver's next stop, or null when there's no estimate. */
+  onEta?: (minutes: number | null) => void;
 }
 
 // Utility to calculate distance in meters (Haversine)
@@ -85,33 +87,44 @@ function MapUpdater({ center, route }: { center: [number, number], route?: [numb
   return null;
 }
 
-export default function DriverMap({ job }: DriverMapProps) {
-  const [eta, setEta] = useState<string | null>(null);
+export default function DriverMap({ job, onEta }: DriverMapProps) {
+  const [etaMinutes, setEtaMinutes] = useState<number | null>(null);
   const [routeData, setRouteData] = useState<[number, number][]>([]);
-  const lastFetchRef = useRef<{ lat: number; lng: number; time: number } | null>(null);
+  const lastFetchRef = useRef<{ lat: number; lng: number; time: number; dest: string } | null>(null);
 
   const pickup: [number, number] | null = job.pickup_lat && job.pickup_lng ? [job.pickup_lat, job.pickup_lng] : null;
   const delivery: [number, number] | null = job.delivery_lat && job.delivery_lng ? [job.delivery_lat, job.delivery_lng] : null;
   const driver: [number, number] | null = job.driver_lat && job.driver_lng ? [job.driver_lat, job.driver_lng] : null;
 
-  // Decide destination based on job status
-  const destination = (job.status === 'pending' || job.status === 'client_pickup') ? pickup : delivery;
+  // Next stop: pickup until the package is collected, then the drop-off.
+  // No estimate once the driver has arrived at it or the job is over.
+  const collected = !!(job.driver_pickup_at || job.client_pickup_at);
+  const arrivedAtNext = collected ? !!job.driver_arrived_delivery_at : !!job.driver_arrived_pickup_at;
+  const finished = ['completed', 'cancelled', 'returned'].includes(job.status);
+  const destination = finished || arrivedAtNext ? null : collected ? delivery : pickup;
+  const destKey = destination ? destination.join(',') : '';
+
+  useEffect(() => { onEta?.(etaMinutes); }, [etaMinutes, onEta]);
 
   useEffect(() => {
     const fetchRoute = async () => {
-      if (!MAPBOX_TOKEN || !driver || !destination) return;
+      if (!MAPBOX_TOKEN || !driver || !destination) {
+        setEtaMinutes(null);
+        setRouteData([]);
+        return;
+      }
 
-      // Smart Polling Check: Moved > 200m or > 5 minutes
+      // Refetch when the next stop changes, the driver moved > 200 m, or every 2 minutes.
       const now = Date.now();
-      if (lastFetchRef.current) {
+      if (lastFetchRef.current && lastFetchRef.current.dest === destKey) {
         const dist = getDistance(driver[0], driver[1], lastFetchRef.current.lat, lastFetchRef.current.lng);
         const timeDiff = now - lastFetchRef.current.time;
-        if (dist < 200 && timeDiff < 300000) return; // Skip if criteria not met
+        if (dist < 200 && timeDiff < 120000) return;
       }
 
       try {
         const query = await fetch(
-          `https://api.mapbox.com/directions/v5/mapbox/driving/${driver[1]},${driver[0]};${destination[1]},${destination[0]}?geometries=geojson&access_token=${MAPBOX_TOKEN}`
+          `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${driver[1]},${driver[0]};${destination[1]},${destination[0]}?geometries=geojson&access_token=${MAPBOX_TOKEN}`
         );
         const json = await query.json();
         
@@ -121,10 +134,8 @@ export default function DriverMap({ job }: DriverMapProps) {
           const coords = route.geometry.coordinates.map((c: [number, number]) => [c[1], c[0]]);
           setRouteData(coords);
           
-          const durationMins = Math.round(route.duration / 60);
-          setEta(`${durationMins} MINS`);
-          
-          lastFetchRef.current = { lat: driver[0], lng: driver[1], time: now };
+          setEtaMinutes(Math.max(1, Math.round(route.duration / 60)));
+          lastFetchRef.current = { lat: driver[0], lng: driver[1], time: now, dest: destKey };
         }
       } catch (err) {
         console.error('Mapbox fetch error:', err);
@@ -132,7 +143,8 @@ export default function DriverMap({ job }: DriverMapProps) {
     };
 
     fetchRoute();
-  }, [driver, destination]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [job.driver_lat, job.driver_lng, destKey]);
 
   const mapCenter: [number, number] = driver || pickup || [25.2048, 55.2708];
 
@@ -171,13 +183,15 @@ export default function DriverMap({ job }: DriverMapProps) {
         </div>
 
         {/* TOP RIGHT: ETA OVERLAY */}
-        {eta && (
+        {etaMinutes != null && (
           <div className="absolute top-6 right-6 z-[1000] animate-in slide-in-from-right zoom-in duration-500">
             <div className="bg-nokael-primary text-white pl-4 pr-5 py-2.5 rounded-2xl shadow-2xl flex items-center gap-3 border border-white/20">
               <Clock className="w-4 h-4 text-nokael-accent" />
               <div className="flex flex-col">
-                <span className="text-[8px] font-black uppercase tracking-widest text-white/60">Estimated Entry</span>
-                <span className="text-xs font-black tracking-widest leading-none">{eta}</span>
+                <span className="text-[8px] font-black uppercase tracking-widest text-white/60">
+                  {collected ? 'Arriving in' : 'At pickup in'}
+                </span>
+                <span className="text-xs font-black tracking-widest leading-none">{etaMinutes} MIN</span>
               </div>
             </div>
           </div>

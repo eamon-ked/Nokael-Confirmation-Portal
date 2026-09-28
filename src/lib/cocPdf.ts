@@ -11,13 +11,35 @@ export interface DriverContact {
   vehicle_plate: string | null;
 }
 
+/** One confirmed custody step with the driver's GPS fix (get_job_pod_by_token). */
+export interface PodFix {
+  step: 'client_pickup' | 'driver_pickup' | 'driver_delivery' | 'client_delivery';
+  method: 'otp' | 'ops_override';
+  driver_lat: number | null;
+  driver_lng: number | null;
+  accuracy_m: number | null;
+  fix_age_s: number | null;
+  confirmed_at: string;
+}
+
+const metersBetween = (aLat: number, aLng: number, bLat: number, bLng: number) => {
+  const rad = (d: number) => (d * Math.PI) / 180;
+  const h = Math.sin(rad(bLat - aLat) / 2) ** 2 +
+    Math.cos(rad(aLat)) * Math.cos(rad(bLat)) * Math.sin(rad(bLng - aLng) / 2) ** 2;
+  return 2 * 6371000 * Math.asin(Math.sqrt(h));
+};
+
+/** The fix for a handover: the driver's own confirmation first, else the client's. */
+const fixFor = (pod: PodFix[], steps: PodFix['step'][]) =>
+  steps.map((s) => pod.find((p) => p.step === s)).find(Boolean) ?? null;
+
 /**
  * Client-side Chain of Custody certificate for the /:token/track page.
  * Built only from what get_job_by_token (+ get_job_driver_by_token) already
  * hands this token — no OTPs are ever printed, only the fact that each
  * handover was code-verified and when.
  */
-export function downloadCocPdf(job: Job, driver: DriverContact | null) {
+export function downloadCocPdf(job: Job, driver: DriverContact | null, pod: PodFix[] = []) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const ink = '#0f172a';
   const muted = '#64748b';
@@ -100,20 +122,30 @@ export function downloadCocPdf(job: Job, driver: DriverContact | null) {
   doc.text('Custody events', M, y);
   y += 9;
 
-  const events: { label: string; at?: string | null; note: string }[] = [
+  const pickupFix = fixFor(pod, ['driver_pickup', 'client_pickup']);
+  const deliveryFix = fixFor(pod, ['driver_delivery', 'client_delivery']);
+  const verifiedBy = (fix: PodFix | null, codeText: string) =>
+    fix?.method === 'ops_override' ? 'Confirmed by Nokael operations' : codeText;
+
+  type Event = { label: string; at?: string | null; note: string; fix?: PodFix | null; address?: [number | null, number | null] };
+  const events: Event[] = [
     { label: 'Job booked', at: job.created_at, note: 'Manifest logged with Nokael dispatch' },
     { label: 'Package ready at origin', at: job.sender_ready_at, note: 'Sender confirmed package prepared' },
     { label: 'Driver arrived at pickup', at: job.driver_arrived_pickup_at, note: job.pickup_location },
     {
       label: 'Custody transferred to driver',
       at: job.driver_pickup_at || job.client_pickup_at,
-      note: 'Handover verified by one-time code',
+      note: verifiedBy(pickupFix, 'Handover verified by one-time code'),
+      fix: pickupFix,
+      address: [job.pickup_lat, job.pickup_lng],
     },
     { label: 'Driver arrived at destination', at: job.driver_arrived_delivery_at, note: job.delivery_location },
     {
       label: 'Custody transferred to recipient',
       at: job.client_delivery_at || job.driver_delivery_at,
-      note: 'Receipt verified by one-time code',
+      note: verifiedBy(deliveryFix, 'Receipt verified by one-time code'),
+      fix: deliveryFix,
+      address: [job.delivery_lat, job.delivery_lng],
     },
   ];
 
@@ -136,6 +168,25 @@ export function downloadCocPdf(job: Job, driver: DriverContact | null) {
     doc.setFontSize(8.5);
     doc.setTextColor(muted);
     doc.text(doc.splitTextToSize(e.note, 120)[0], M + 8, y + 4.5);
+
+    // Where the handover happened, as a tappable map link.
+    const f = e.at ? e.fix : null;
+    if (f && f.driver_lat != null && f.driver_lng != null) {
+      const coords = `${f.driver_lat.toFixed(5)}, ${f.driver_lng.toFixed(5)}`;
+      const [aLat, aLng] = e.address ?? [null, null];
+      const off = aLat != null && aLng != null ? metersBetween(f.driver_lat, f.driver_lng, aLat, aLng) : null;
+      const extra = [
+        f.accuracy_m != null ? `±${Math.round(f.accuracy_m)} m` : null,
+        off != null ? (off < 1000 ? `${Math.round(off)} m from booked address` : `${(off / 1000).toFixed(1)} km from booked address`) : null,
+      ].filter(Boolean).join(' · ');
+      doc.setTextColor(accent);
+      doc.textWithLink(`GPS ${coords}`, M + 8, y + 9, { url: `https://maps.google.com/?q=${f.driver_lat},${f.driver_lng}` });
+      if (extra) {
+        doc.setTextColor(muted);
+        doc.text(`  ·  ${extra}`, M + 8 + doc.getTextWidth(`GPS ${coords}`), y + 9);
+      }
+      y += 4.5;
+    }
     y += 13;
   });
 
@@ -160,7 +211,8 @@ export function downloadCocPdf(job: Job, driver: DriverContact | null) {
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.5);
   doc.setTextColor(muted);
-  doc.text('Each handover was confirmed with a single-use code held by the party receiving custody.', W / 2, 280, { align: 'center' });
+  doc.text('Each handover was confirmed with a single-use code held by the party receiving custody.', W / 2, 276, { align: 'center' });
+  doc.text('GPS is the driver\'s phone position when the handover was confirmed.', W / 2, 280, { align: 'center' });
   doc.text(`Nokael Chain of Custody · ${job.job_ref} · ${window.location.host}`, W / 2, 285, { align: 'center' });
 
   doc.save(`Nokael-COC-${job.job_ref}.pdf`);

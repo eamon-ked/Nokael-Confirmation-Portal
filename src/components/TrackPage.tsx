@@ -3,6 +3,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import {
   AlertCircle,
   CheckCircle2,
+  Clock,
   Copy,
   Download,
   Eye,
@@ -24,7 +25,7 @@ import { supabase, isSupabaseConfigured } from '@/src/lib/supabase';
 import { formatUAETime } from '@/src/lib/utils';
 import { Job } from '@/src/types';
 import { WHATSAPP_NUMBER } from '@/src/lib/constants';
-import { downloadCocPdf, DriverContact } from '@/src/lib/cocPdf';
+import { downloadCocPdf, DriverContact, PodFix } from '@/src/lib/cocPdf';
 import DriverMap from './DriverMap';
 import CustodyTimeline from './CustodyTimeline';
 
@@ -128,6 +129,7 @@ export default function TrackPage() {
   const [showOtp, setShowOtp] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [, setTick] = useState(0);
+  const [etaMinutes, setEtaMinutes] = useState<number | null>(null);
 
   const fetchJob = useCallback(async () => {
     if (!token) return;
@@ -151,8 +153,18 @@ export default function TrackPage() {
     if (!err) setDriver((data as DriverContact) || null);
   }, [token]);
 
+  // Handover GPS for the COC certificate. Missing RPC (supabase-coc-gps-migration.sql
+  // not applied) just leaves it empty; the certificate prints without coordinates.
+  const [pod, setPod] = useState<PodFix[]>([]);
+  const fetchPod = useCallback(async () => {
+    if (!token) return;
+    const { data, error: err } = await supabase.rpc('get_job_pod_by_token', { p_token: token });
+    if (!err) setPod((data as PodFix[]) || []);
+  }, [token]);
+
   useEffect(() => { fetchJob(); }, [fetchJob]);
   useEffect(() => { if (job?.driver_id) fetchDriver(); else setDriver(null); }, [job?.driver_id, job?.status, fetchDriver]);
+  useEffect(() => { if (job?.status === 'completed') fetchPod(); }, [job?.status, fetchPod]);
 
   const isActive = !!job && !['completed', 'cancelled', 'returned'].includes(job.status);
 
@@ -267,6 +279,14 @@ export default function TrackPage() {
                     : job.cancellation_reason || 'This job has been cancelled. Contact dispatch if this is unexpected.'
                   : sub}
               </p>
+              {isActive && etaMinutes != null && !locationStale && (
+                <p className="mt-3 inline-flex items-center gap-2 rounded-xl bg-nokael-accent-light px-3 py-2 text-sm font-semibold text-nokael-primary">
+                  <Clock className="w-4 h-4 text-nokael-accent" />
+                  {stage >= 2 ? 'Arriving' : 'Driver at pickup'} around{' '}
+                  {new Date(Date.now() + etaMinutes * 60000).toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Dubai' })}
+                  <span className="font-normal text-nokael-text-muted">· about {etaMinutes} min</span>
+                </p>
+              )}
             </div>
             {isActive && (
               <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-nokael-success bg-nokael-success/10 px-2.5 py-1 rounded-full shrink-0">
@@ -315,10 +335,10 @@ export default function TrackPage() {
               </span>
               <div>
                 <p className="font-semibold text-nokael-primary">Chain of Custody certificate</p>
-                <p className="text-[13px] text-nokael-text-muted">Every handover, time-stamped and code-verified.</p>
+                <p className="text-[13px] text-nokael-text-muted">Every handover, time-stamped, code-verified and GPS-located.</p>
               </div>
             </div>
-            <button onClick={() => downloadCocPdf(job, driver)} className="nokael-button gap-2 !bg-nokael-success">
+            <button onClick={() => downloadCocPdf(job, driver, pod)} className="nokael-button gap-2 !bg-nokael-success">
               <Download className="w-5 h-5" /> Download COC (PDF)
             </button>
           </section>
@@ -392,7 +412,7 @@ export default function TrackPage() {
         {isActive && job.driver_id && (
           <section className="space-y-2">
             {hasDriverPos ? (
-              <DriverMap job={job} />
+              <DriverMap job={job} onEta={setEtaMinutes} />
             ) : (
               <div className="nokael-card text-sm text-nokael-text-muted flex items-center gap-2">
                 <Navigation className="w-4 h-4" /> Live location appears once the driver starts moving.

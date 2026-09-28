@@ -90,6 +90,8 @@ function MapUpdater({ center, route }: { center: [number, number], route?: [numb
 export default function DriverMap({ job, onEta }: DriverMapProps) {
   const [etaMinutes, setEtaMinutes] = useState<number | null>(null);
   const [routeData, setRouteData] = useState<[number, number][]>([]);
+  // Drop back to OSM if Mapbox rejects the tiles (bad/expired token), rather than a blank map.
+  const [mapboxFailed, setMapboxFailed] = useState(false);
   const lastFetchRef = useRef<{ lat: number; lng: number; time: number; dest: string } | null>(null);
 
   const pickup: [number, number] | null = job.pickup_lat && job.pickup_lng ? [job.pickup_lat, job.pickup_lng] : null;
@@ -158,9 +160,22 @@ export default function DriverMap({ job, onEta }: DriverMapProps) {
           zoomControl={false}
           attributionControl={false}
         >
-          <TileLayer
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
+          {/* OSM's standard tiles label places in the local language (Arabic in the UAE);
+              the portal is English, so use Mapbox Streets and fall back to OSM without a working token. */}
+          {MAPBOX_TOKEN && !mapboxFailed ? (
+            <TileLayer
+              key="tiles-mapbox"
+              eventHandlers={{ tileerror: () => setMapboxFailed(true) }}
+              url={`https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/512/{z}/{x}/{y}{r}?access_token=${MAPBOX_TOKEN}`}
+              tileSize={512}
+              zoomOffset={-1}
+            />
+          ) : (
+            <TileLayer
+              key="tiles-osm"
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+          )}
           
           {pickup && <Marker position={pickup} icon={pickupIcon} />}
           {delivery && <Marker position={delivery} icon={deliveryIcon} />}

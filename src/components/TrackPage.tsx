@@ -24,7 +24,7 @@ import {
 import { supabase, isSupabaseConfigured } from '@/src/lib/supabase';
 import { formatUAETime } from '@/src/lib/utils';
 import { Job } from '@/src/types';
-import { WHATSAPP_NUMBER } from '@/src/lib/constants';
+import { WHATSAPP_NUMBER, LINK_EXPIRY_HOURS, isLinkExpired, redirectToBooking } from '@/src/lib/constants';
 import { downloadCocPdf, DriverContact, PodFix } from '@/src/lib/cocPdf';
 import DriverMap from './DriverMap';
 import CustodyTimeline from './CustodyTimeline';
@@ -134,6 +134,7 @@ export default function TrackPage() {
   const fetchJob = useCallback(async () => {
     if (!token) return;
     const { data, error: err } = await supabase.rpc('get_job_by_token', { p_token: token }).maybeSingle();
+    if (isLinkExpired(err)) return redirectToBooking();
     if (err) {
       setError(isSupabaseConfigured ? 'We could not load this job right now. Please refresh, or contact dispatch.' : 'This tracking page is not configured. Please contact Nokael dispatch.');
     } else if (!data) {
@@ -336,6 +337,9 @@ export default function TrackPage() {
               <div>
                 <p className="font-semibold text-nokael-primary">Chain of Custody certificate</p>
                 <p className="text-[13px] text-nokael-text-muted">Every handover, time-stamped, code-verified and GPS-located.</p>
+                <p className="text-[12px] text-nokael-text-muted mt-1">
+                  This link closes {LINK_EXPIRY_HOURS} hours after delivery. Download your certificate now. After that, dispatch can send it to you.
+                </p>
               </div>
             </div>
             <button onClick={() => downloadCocPdf(job, driver, pod)} className="nokael-button gap-2 !bg-nokael-success">

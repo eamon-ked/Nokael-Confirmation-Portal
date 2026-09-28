@@ -82,6 +82,13 @@ export async function cacheJobData(
   await store.put(offlineJob);
 }
 
+// Drop a job's cached copy (e.g. its link has expired) so it can't be shown offline.
+export async function removeCachedJob(token: string): Promise<void> {
+  const db = await openDB();
+  const tx = db.transaction(JOBS_STORE, 'readwrite');
+  tx.objectStore(JOBS_STORE).delete(token);
+}
+
 // Get cached job data
 export async function getCachedJob(token: string): Promise<OfflineJob | null> {
   const db = await openDB();

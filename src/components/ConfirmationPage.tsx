@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { supabase, isSupabaseConfigured } from '@/src/lib/supabase';
 import { formatUAETime, isWhatsAppBrowser } from '@/src/lib/utils';
 import { Job, Step, STEP_CONFIG, VALID_STEPS } from '@/src/types';
-import { DISPATCH_WA_URL, WHATSAPP_NUMBER } from '@/src/lib/constants';
+import { DISPATCH_WA_URL, WHATSAPP_NUMBER, isLinkExpired, redirectToBooking } from '@/src/lib/constants';
 
 const getContactPhone = (phone: string | null | undefined) => {
   const p = phone || WHATSAPP_NUMBER;
@@ -44,6 +44,7 @@ const BackgroundGeolocation = registerPlugin<any>('BackgroundGeolocation');
 import { 
   cacheJobData, 
   getCachedJob, 
+  removeCachedJob,
   verifyOtpOffline, 
   queueConfirmation, 
   isOnline,
@@ -1130,6 +1131,7 @@ export default function ConfirmationPage() {
           clearTimeout(timeoutId);
 
           if (supabaseError) {
+            if (isLinkExpired(supabaseError)) { await removeCachedJob(token!).catch(() => {}); redirectToBooking(); return; }
             if (supabaseError.code === 'PGRST116') { setError('Security Error: Invalid or expired access link. Please check the link or contact dispatch.'); setLoading(false); return; }
             if (supabaseError.message?.includes('failed to fetch') || supabaseError.message?.includes('NetworkError')) throw new Error('NETWORK_ERROR');
             throw supabaseError;

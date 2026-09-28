@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="robots" content="noindex" />
+  <title>Nokael Driver for Android</title>
+  <link rel="icon" href="/icon-192.png" />
+  <style>
+    :root {
+      --bg: #f4f6f9; --card: #ffffff; --ink: #0f172a; --muted: #64748b; --line: #e2e8f0;
+      --accent: #0369a1; --accent-soft: #e0f2fe; --warn-bg: #fffbeb; --warn-ink: #92400e;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0b1120; --card: #111827; --ink: #f1f5f9; --muted: #94a3b8; --line: #1f2937;
+        --accent: #38bdf8; --accent-soft: #0c2536; --warn-bg: #2a1f06; --warn-ink: #fcd34d;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg); color: var(--ink);
+      font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      padding: max(20px, env(safe-area-inset-top)) 16px max(32px, env(safe-area-inset-bottom));
+    }
+    main { max-width: 520px; margin: 0 auto; display: grid; gap: 16px; }
+    header { display: flex; align-items: center; gap: 10px; }
+    header img { width: 36px; height: 36px; border-radius: 9px; }
+    header b { font-size: 18px; letter-spacing: .02em; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 20px; }
+    h1 { margin: 0 0 6px; font-size: 24px; line-height: 1.2; }
+    p { margin: 0; color: var(--muted); }
+    .download {
+      margin-top: 18px; display: flex; align-items: center; justify-content: center; gap: 10px;
+      min-height: 56px; border-radius: 14px; background: var(--ink); color: var(--card);
+      font-weight: 700; font-size: 17px; text-decoration: none;
+    }
+    .meta { margin-top: 10px; font-size: 13px; text-align: center; }
+    ol { margin: 0; padding: 0; list-style: none; counter-reset: step; display: grid; gap: 14px; }
+    li { counter-increment: step; display: grid; grid-template-columns: 30px 1fr; gap: 12px; }
+    li::before {
+      content: counter(step); width: 30px; height: 30px; border-radius: 50%;
+      background: var(--accent-soft); color: var(--accent); font-weight: 700;
+      display: grid; place-items: center; font-size: 14px;
+    }
+    li b { display: block; }
+    li span { color: var(--muted); font-size: 14px; }
+    h2 { margin: 0 0 14px; font-size: 17px; }
+    .note { background: var(--warn-bg); color: var(--warn-ink); border-color: transparent; font-size: 14px; }
+    .note p { color: inherit; }
+    .iphone { font-size: 14px; }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <img src="/nokael-logo.jpg" alt="" />
+      <b>NOKAEL</b>
+    </header>
+
+    <section class="card">
+      <h1>Nokael Driver for Android</h1>
+      <p>The driver app for Nokael jobs: your job list, handover codes and live location for dispatch.</p>
+      <a class="download" id="download" href="/android/nokael-driver.apk" download>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+        Download the app
+      </a>
+      <p class="meta" id="meta">Android 8 or newer</p>
+    </section>
+
+    <section class="card">
+      <h2>How to install</h2>
+      <ol>
+        <li><div><b>Tap “Download the app”</b><span>If Chrome asks whether to keep the file, tap <em>Download anyway</em>.</span></div></li>
+        <li><div><b>Open the downloaded file</b><span>Tap the notification, or find <em>nokael-driver.apk</em> in your Downloads.</span></div></li>
+        <li><div><b>Allow the install</b><span>Android will ask to allow installs from Chrome. Tap <em>Settings</em>, turn on <em>Allow from this source</em>, then go back.</span></div></li>
+        <li><div><b>Tap Install</b><span>If Play Protect warns about an unknown app, tap <em>More details</em> → <em>Install anyway</em>. The app comes directly from Nokael, not the Play Store.</span></div></li>
+        <li><div><b>Open Nokael Driver and sign in</b><span>Enter your phone number or email and the password dispatch gave you, then allow location so dispatch can see you on jobs.</span></div></li>
+      </ol>
+    </section>
+
+    <section class="card note">
+      <p><b>Updates:</b> the app tells you when a new version is ready. Tap <em>Update</em>, then install it the same way. Your sign-in and jobs are kept.</p>
+    </section>
+
+    <p class="iphone">On an iPhone? Use the web version at <a href="/driver-app/">coc.nokael.com/driver-app</a>. Trouble installing? Call or WhatsApp dispatch.</p>
+  </main>
+
+  <script>
+    // Show the current version and point the button at the published APK.
+    fetch('/android/version.json', { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (v) {
+        if (!v) return;
+        if (v.apkUrl) document.getElementById('download').href = v.apkUrl;
+        if (v.versionName) document.getElementById('meta').textContent = 'Version ' + v.versionName + ' · Android 8 or newer';
+      })
+      .catch(function () {});
+  </script>
+</body>
+</html>

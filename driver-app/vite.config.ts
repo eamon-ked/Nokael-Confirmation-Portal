@@ -20,6 +20,8 @@ export default defineConfig(({ command, mode }) => {
     // Served by the Confirmation Portal at https://coc.nokael.com/driver-app/
     base: "/driver-app/",
     plugins: [react()],
+    // Reported to dispatch with each sign-in (driver_report_app) so they can see which build a phone runs.
+    define: { __APP_BUILD__: JSON.stringify(new Date().toISOString().slice(0, 10)) },
     server: { host: true, port: 5180 },
     preview: { host: true, port: 5180 },
   };

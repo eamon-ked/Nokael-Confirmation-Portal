@@ -87,6 +87,7 @@ class AppContainer {
   readonly broadcaster: LiveLocationBroadcaster;
   readonly push: DriverPush;
 
+  private readonly sessionRpc: SessionRpc;
   private pollTimer: ReturnType<typeof setTimeout> | null = null;
   private syncTimer: ReturnType<typeof setTimeout> | null = null;
   private syncBackoffMs = SYNC_BASE_MS;
@@ -95,6 +96,7 @@ class AppContainer {
     const tokens = new SessionTokens();
     const rpc = new SupabaseRpcClient(AppConfig.supabaseUrl, AppConfig.supabaseAnonKey);
     const sessionRpc = new SessionRpc(rpc, tokens, () => this.expireLocally());
+    this.sessionRpc = sessionRpc;
     this.auth = new RemoteAuthRepository(rpc, sessionRpc, tokens);
     this.jobs = new RemoteJobRepository(sessionRpc, () => this.scheduleArrivalSync(true));
     this.dispatchLocation = new RemoteDispatchLocationRepository(sessionRpc);
@@ -135,9 +137,12 @@ class AppContainer {
       if (document.visibilityState === "visible") this.scheduleArrivalSync(false);
     });
 
-    // Keep this browser's push registration current for whoever is signed in (never prompts).
+    // For whoever is signed in: keep this browser's push registration current (never
+    // prompts) and tell dispatch which build it runs.
     this.session.driver.subscribe(() => {
-      if (this.session.driver.get() != null) void this.push.sync();
+      if (this.session.driver.get() == null) return;
+      void this.push.sync();
+      void this.sessionRpc.call("driver_report_app", { p_platform: "web", p_version: `web ${__APP_BUILD__}` });
     });
 
     // Replaces WorkManager: replay queued arrivals when the connection returns,

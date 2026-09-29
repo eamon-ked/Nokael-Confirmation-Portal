@@ -2,9 +2,40 @@ import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { createHash } from 'crypto';
+import fs from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+/**
+ * Records one APK download. Fire-and-forget: a failure here must never affect the
+ * download. Uses the same public Supabase URL and anon key the web apps ship with.
+ */
+async function logApkDownload(req: express.Request, distPath: string) {
+  const url = process.env.VITE_SUPABASE_URL;
+  const key = process.env.VITE_SUPABASE_ANON_KEY;
+  if (!url || !key) return;
+  try {
+    const ip = String(req.headers['cf-connecting-ip'] ?? req.headers['x-forwarded-for'] ?? req.ip ?? '').split(',')[0].trim();
+    let version: string | null = null;
+    try {
+      version = JSON.parse(fs.readFileSync(path.join(distPath, 'android', 'version.json'), 'utf-8')).versionName ?? null;
+    } catch { /* no manifest: count without a version */ }
+    await fetch(`${url.replace(/\/$/, '')}/rest/v1/rpc/log_app_download`, {
+      method: 'POST',
+      headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        p_version: version,
+        p_ip_hash: ip ? createHash('sha256').update(`nokael-apk:${ip}`).digest('hex').slice(0, 32) : null,
+        p_country: String(req.headers['cf-ipcountry'] ?? '') || null,
+        p_user_agent: String(req.headers['user-agent'] ?? '') || null,
+      }),
+    });
+  } catch (err) {
+    console.warn('[apk] download not logged:', (err as Error).message);
+  }
+}
 
 async function startServer() {
   const app = express();
@@ -20,6 +51,16 @@ async function startServer() {
   } else {
     // Serve static files in production
     const distPath = path.join(process.cwd(), 'dist');
+
+    // Count Android APK downloads (public.log_app_download), then serve the file as usual.
+    // Only a full GET counts: HEAD and resumed (Range) requests are the same download.
+    // The database keeps one row per connection, version and day; the IP is only hashed.
+    app.get('/android/nokael-driver.apk', (req, _res, next) => {
+      const range = req.headers.range;
+      if (!range || /^bytes=0-/.test(range)) void logApkDownload(req, distPath);
+      next();
+    });
+
     app.use(express.static(distPath));
 
     // Driver web app (PWA), built into dist/driver-app by `npm run build:driver`.

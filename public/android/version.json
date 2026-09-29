@@ -1,7 +1,7 @@
 {
-  "versionCode": 3,
-  "versionName": "1.0.2",
-  "minVersionCode": 3,
+  "versionCode": 4,
+  "versionName": "1.0.3",
+  "minVersionCode": 4,
   "apkUrl": "https://coc.nokael.com/android/nokael-driver.apk",
-  "notes": "Notifications for new jobs, job changes and cancellations, and pickup reminders — even when the app is closed."
+  "notes": "The app now opens offline unless you're in the middle of a shift. Tap GO ONLINE when you're ready to take jobs."
 }

@@ -6,7 +6,7 @@
 import { AppConfig } from "./config";
 import { DriverPush } from "./push";
 import { LiveLocationBroadcaster, LocationPermissionState } from "./location";
-import type { Driver } from "./model";
+import { isStarted, type Driver } from "./model";
 import {
   RemoteAuthRepository,
   RemoteDispatchLocationRepository,
@@ -15,31 +15,66 @@ import {
   type DispatchLocationRepository,
   type JobRepository,
 } from "./repositories";
-import { SessionRpc, SessionTokens, SupabaseRpcClient } from "./rpc";
+import { SessionRpc, SessionTokens, SupabaseRpcClient, safeRead, safeWrite } from "./rpc";
 import { Store } from "./store";
 
 /** What the app knows about the stored session while it is starting up. */
 export type StartupState = "CHECKING" | "SIGNED_IN" | "SIGNED_OUT" | "UNREACHABLE";
 
-/** Who is signed in, and whether they are taking jobs. */
+/** Online this recently when the app opens: treat it as the same shift. */
+export const RESUME_WINDOW_MS = 2 * 60 * 60 * 1000;
+const WAS_ONLINE_KEY = "nokael.driver.wasOnline";
+const LAST_ONLINE_KEY = "nokael.driver.lastOnlineAt";
+
+/**
+ * Who is signed in, and whether they are taking jobs.
+ *
+ * Opening the app doesn't put a driver online by itself: a shift resumes only if
+ * they were online within RESUME_WINDOW_MS or a job is under way
+ * (resumeForJobInProgress); otherwise they start offline and use the switch.
+ * Same rule as the Android SessionManager.
+ */
 export class SessionManager {
   readonly driver = new Store<Driver | null>(null);
-  readonly isOnline = new Store(true);
+  readonly isOnline = new Store(false);
   readonly startup = new Store<StartupState>("CHECKING");
+
+  /** The driver used the switch since signing in; automatic resumes then stay out of it. */
+  private choseThisSession = false;
 
   signIn(driver: Driver) {
     this.driver.set(driver);
-    this.isOnline.set(true);
+    this.choseThisSession = false;
+    const lastOnlineAt = Number(safeRead(LAST_ONLINE_KEY) ?? 0);
+    this.setOnline(safeRead(WAS_ONLINE_KEY) === "1" && Date.now() - lastOnlineAt < RESUME_WINDOW_MS);
     this.startup.set("SIGNED_IN");
   }
 
   signOut() {
     this.driver.set(null);
+    this.setOnline(false);
     this.startup.set("SIGNED_OUT");
   }
 
   toggleOnline() {
-    this.isOnline.update((online) => !online);
+    this.choseThisSession = true;
+    this.setOnline(!this.isOnline.get());
+  }
+
+  /** A job is under way: back online, unless the driver switched themselves off this session. */
+  resumeForJobInProgress() {
+    if (!this.choseThisSession && this.driver.get() != null && !this.isOnline.get()) this.setOnline(true);
+  }
+
+  /** Called periodically while online, so a closed tab still knows how recent the shift was. */
+  touchOnline() {
+    if (this.isOnline.get()) safeWrite(LAST_ONLINE_KEY, String(Date.now()));
+  }
+
+  private setOnline(online: boolean) {
+    this.isOnline.set(online);
+    safeWrite(WAS_ONLINE_KEY, online ? "1" : "0");
+    if (online) safeWrite(LAST_ONLINE_KEY, String(Date.now()));
   }
 }
 
@@ -135,6 +170,19 @@ class AppContainer {
     document.addEventListener("visibilitychange", () => {
       syncPolling();
       if (document.visibilityState === "visible") this.scheduleArrivalSync(false);
+    });
+
+    // While online, note the time every minute (and when the page goes away), so
+    // reopening within RESUME_WINDOW_MS picks the shift back up.
+    setInterval(() => this.session.touchOnline(), 60_000);
+    window.addEventListener("pagehide", () => this.session.touchOnline());
+
+    // A job under way means the driver is working: put them back online.
+    this.jobs.jobs.subscribe(() => {
+      const inProgress = this.jobs.jobs
+        .get()
+        .some((job) => job.listStatus === "ACTIVE" && isStarted(job.stage) && job.stage !== "DROPPED_OFF");
+      if (inProgress) this.session.resumeForJobInProgress();
     });
 
     // For whoever is signed in: keep this browser's push registration current (never

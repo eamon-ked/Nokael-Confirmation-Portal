@@ -93,6 +93,23 @@ export function HomeScreen() {
         </div>
       </div>
 
+      {/* The app opens offline unless a shift is being resumed; make the next step obvious. */}
+      {!isOnline && !isLoading && (
+        <div style={{ padding: "16px 16px 0" }}>
+          <Tap onClick={() => void onToggleOnline()} color="var(--green)" contentColor="#fff" elevation={4} radius={20} className="full">
+            <div className="row" style={{ gap: 12, padding: "16px 20px", justifyContent: "space-between" }}>
+              <div className="col" style={{ minWidth: 0 }}>
+                <span style={{ fontSize: 16, fontWeight: 900 }}>You're offline</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.85)" }}>
+                  Go online to take jobs and share your location with dispatch.
+                </span>
+              </div>
+              <span style={{ fontSize: 14, fontWeight: 900, whiteSpace: "nowrap" }}>GO ONLINE</span>
+            </div>
+          </Tap>
+        </div>
+      )}
+
       <SectionLabel text="Assigned Jobs" style={{ padding: "20px 16px 12px" }} />
       {isLoading ? (
         <MessageCard emoji="⏳" emojiSize={40} text="Loading your jobs…" />

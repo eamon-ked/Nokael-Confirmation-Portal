@@ -23,6 +23,11 @@ async function registration(): Promise<ServiceWorkerRegistration | null> {
 }
 
 export class DriverPush {
+  /** True when the browser can do push and the driver hasn't answered the prompt yet. */
+  get canAsk(): boolean {
+    return supported() && Notification.permission === "default";
+  }
+
   constructor(
     private readonly session: SessionRpc,
     /** For push_unsubscribe, which takes no session token. */

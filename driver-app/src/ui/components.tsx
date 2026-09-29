@@ -270,7 +270,7 @@ export function ConfirmSheet({
       <div className="center" style={{ fontSize: 20, fontWeight: 900, color: "var(--gray-900)", margin: "12px 0 8px" }}>
         {title}
       </div>
-      <div className="center" style={{ fontSize: 14, lineHeight: "22px", color: "var(--gray-500)", marginBottom: 24 }}>
+      <div className="center" style={{ fontSize: 14, lineHeight: "22px", color: "var(--gray-500)", marginBottom: 24, whiteSpace: "pre-line" }}>
         {message}
       </div>
       <Tap onClick={onConfirm} color={confirmColor} radius={16} className="full" style={{ marginBottom: 12 }}>

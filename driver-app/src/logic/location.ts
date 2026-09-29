@@ -49,6 +49,32 @@ export class LocationPermissionState {
 }
 
 /**
+ * Where to re-allow location once it's blocked. A browser (and an installed web
+ * app) remembers "Don't allow" and never asks again, so the driver has to change
+ * it in settings; the steps differ per platform.
+ */
+export function locationHelpSteps(): string {
+  const ua = navigator.userAgent;
+  if (/iPhone|iPad|iPod/.test(ua)) {
+    return [
+      "1. Open Settings → Privacy & Security → Location Services and make sure it's on.",
+      "2. In the same list, open Safari Websites → choose \"While Using the App\" and turn on Precise Location.",
+      "3. Also check Settings → Apps → Safari → Location is \"Ask\" or \"Allow\".",
+      "4. Come back here and tap Try again.",
+    ].join("\n");
+  }
+  if (/Android/.test(ua)) {
+    return [
+      "1. Pull down quick settings and make sure Location is on.",
+      "2. Open Chrome → ⋮ → Settings → Site settings → Location → coc.nokael.com → Allow.",
+      "3. Check Android Settings → Apps → Chrome → Permissions → Location → Allow (precise).",
+      "4. Come back here and tap Try again.",
+    ].join("\n");
+  }
+  return "Click the lock icon next to the address, set Location to Allow, reload the page, then tap Try again.";
+}
+
+/**
  * One-shot fix for the "I am here" arrival log. Resolves null instead of
  * failing whenever permission is missing or no fix comes within `timeoutMs`,
  * so a GPS that hangs (basement car park) never stalls the driver.

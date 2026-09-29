@@ -1,11 +1,11 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { container } from "../../logic/container";
 import { calculateStats, cargo, clientName, formatAed, isStarted, scheduledTime, type Job } from "../../logic/model";
 import { useStore } from "../../logic/store";
-import { Emoji, SectionLabel, Tap, toast, useThemeColor } from "../components";
+import { ConfirmSheet, Emoji, SectionLabel, Tap, toast, useThemeColor } from "../components";
+import { locationHelpSteps } from "../../logic/location";
 import { useNav } from "../nav";
 
-const LOCATION_NEEDED = "Precise location is needed to go online. Allow location for this site in your browser settings.";
 
 export function HomeScreen() {
   useThemeColor("#26323F");
@@ -23,6 +23,11 @@ export function HomeScreen() {
 
   // Being online promises dispatch a live position, so "online" and "location
   // granted" must never disagree: denied -> forced offline, with an explanation.
+  // Blocked location can only be fixed in settings; this sheet says where.
+  const [locationHelp, setLocationHelp] = useState(false);
+  // Re-render after the job-alerts prompt is answered.
+  const [, setPushAnswered] = useState(0);
+
   const asked = useRef(false);
   useEffect(() => {
     if (asked.current || !container.session.isOnline.get()) return;
@@ -30,24 +35,31 @@ export function HomeScreen() {
     void container.locationPermission.request().then((granted) => {
       if (!granted) {
         if (container.session.isOnline.get()) container.session.toggleOnline();
-        toast(LOCATION_NEEDED, true);
+        setLocationHelp(true);
       }
     });
   }, []);
 
+  // Only location is asked here: installed web apps (iPhone especially) allow one
+  // permission prompt per tap, so job alerts get their own button below.
   const onToggleOnline = async () => {
     if (container.session.isOnline.get()) {
       container.session.toggleOnline();
       return;
     }
-    // Going online is when a driver wants job alerts; the tap lets the browser ask.
-    void container.push.enable();
     const granted = await container.locationPermission.request();
     if (granted) {
+      setLocationHelp(false);
       if (!container.session.isOnline.get()) container.session.toggleOnline();
     } else {
-      toast(LOCATION_NEEDED, true);
+      setLocationHelp(true);
     }
+  };
+
+  const onEnableAlerts = async () => {
+    await container.push.enable();
+    setPushAnswered((n) => n + 1);
+    if (Notification.permission === "granted") toast("Job alerts are on.");
   };
 
   /**
@@ -110,6 +122,20 @@ export function HomeScreen() {
         </div>
       )}
 
+      {isOnline && container.push.canAsk && (
+        <div style={{ padding: "16px 16px 0" }}>
+          <Tap onClick={() => void onEnableAlerts()} color="#fff" contentColor="var(--gray-700)" elevation={1} radius={20} className="full">
+            <div className="row" style={{ gap: 12, padding: "14px 20px", justifyContent: "space-between" }}>
+              <div className="col" style={{ minWidth: 0 }}>
+                <span style={{ fontSize: 15, fontWeight: 900, color: "var(--gray-900)" }}>🔔 Turn on job alerts</span>
+                <span style={{ fontSize: 12, color: "var(--gray-500)" }}>Get notified about new jobs and changes, even when the app is closed.</span>
+              </div>
+              <span style={{ fontSize: 13, fontWeight: 900, color: "var(--blue)", whiteSpace: "nowrap" }}>TURN ON</span>
+            </div>
+          </Tap>
+        </div>
+      )}
+
       <SectionLabel text="Assigned Jobs" style={{ padding: "20px 16px 12px" }} />
       {isLoading ? (
         <MessageCard emoji="⏳" emojiSize={40} text="Loading your jobs…" />
@@ -133,6 +159,18 @@ export function HomeScreen() {
         </>
       )}
       <div style={{ height: "calc(40px + var(--safe-bottom))" }} />
+
+      {locationHelp && (
+        <ConfirmSheet
+          emoji="📍"
+          title="Location is blocked"
+          message={`Going online shares your location with dispatch, so it has to be allowed.\n\n${locationHelpSteps()}`}
+          confirmLabel="Try again"
+          confirmColor="var(--green)"
+          onConfirm={() => void onToggleOnline()}
+          onDismiss={() => setLocationHelp(false)}
+        />
+      )}
     </div>
   );
 }

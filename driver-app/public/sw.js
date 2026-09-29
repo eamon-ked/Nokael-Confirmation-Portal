@@ -62,3 +62,37 @@ self.addEventListener("fetch", (event) => {
     ),
   );
 });
+
+// Push notifications (new job, job changed or cancelled, pickup reminder), sent by
+// the push-dispatch Edge Function. Tapping one opens (or focuses) the app.
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { body: event.data ? event.data.text() : "" };
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title || "Nokael", {
+      body: data.body || "",
+      tag: data.tag || undefined,
+      renotify: !!data.tag,
+      icon: BASE + "icons/icon-192.png",
+      badge: BASE + "icons/icon-192.png",
+      data: { url: BASE },
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = new URL(BASE, self.location.origin).href;
+  event.waitUntil(
+    (async () => {
+      const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      const open = windows.find((w) => w.url.startsWith(target));
+      if (open) return open.focus();
+      return self.clients.openWindow(target);
+    })(),
+  );
+});

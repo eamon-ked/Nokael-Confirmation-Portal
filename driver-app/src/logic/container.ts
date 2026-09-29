@@ -4,6 +4,7 @@
  * Nokael Supabase backend; no screen constructs its own dependencies.
  */
 import { AppConfig } from "./config";
+import { DriverPush } from "./push";
 import { LiveLocationBroadcaster, LocationPermissionState } from "./location";
 import type { Driver } from "./model";
 import {
@@ -84,6 +85,7 @@ class AppContainer {
   readonly jobs: JobRepository;
   readonly dispatchLocation: DispatchLocationRepository;
   readonly broadcaster: LiveLocationBroadcaster;
+  readonly push: DriverPush;
 
   private pollTimer: ReturnType<typeof setTimeout> | null = null;
   private syncTimer: ReturnType<typeof setTimeout> | null = null;
@@ -97,6 +99,7 @@ class AppContainer {
     this.jobs = new RemoteJobRepository(sessionRpc, () => this.scheduleArrivalSync(true));
     this.dispatchLocation = new RemoteDispatchLocationRepository(sessionRpc);
     this.broadcaster = new LiveLocationBroadcaster(this.dispatchLocation);
+    this.push = new DriverPush(sessionRpc, rpc);
   }
 
   /** Call once, at boot. */
@@ -132,6 +135,11 @@ class AppContainer {
       if (document.visibilityState === "visible") this.scheduleArrivalSync(false);
     });
 
+    // Keep this browser's push registration current for whoever is signed in (never prompts).
+    this.session.driver.subscribe(() => {
+      if (this.session.driver.get() != null) void this.push.sync();
+    });
+
     // Replaces WorkManager: replay queued arrivals when the connection returns,
     // at start (the tab may have closed before they synced), and with backoff.
     window.addEventListener("online", () => this.scheduleArrivalSync(false));
@@ -160,6 +168,7 @@ class AppContainer {
     // Stop location first: once the token is revoked the server can't be told.
     if (this.broadcaster.running) await this.broadcaster.stop();
     else await this.dispatchLocation.markOffline().catch(() => undefined);
+    await this.push.disable();
     await this.auth.logout().catch(() => undefined);
     this.expireLocally();
   }

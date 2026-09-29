@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import {
   AlertCircle,
+  Bell,
+  BellRing,
   CheckCircle2,
   Clock,
   Copy,
@@ -28,6 +30,7 @@ import { WHATSAPP_NUMBER, LINK_EXPIRY_HOURS, isLinkExpired, redirectToBooking } 
 import { downloadCocPdf, DriverContact, PodFix } from '@/src/lib/cocPdf';
 import DriverMap from './DriverMap';
 import CustodyTimeline from './CustodyTimeline';
+import { enableTrackingPush, trackingPushState, type TrackingPushState } from '@/src/lib/push';
 
 /**
  * Client tracking page — /:token/track (sender) or /:token/track?for=recipient.
@@ -125,6 +128,8 @@ export default function TrackPage() {
   const [job, setJob] = useState<Job | null>(null);
   const [driver, setDriver] = useState<DriverContact | null>(null);
   const [loading, setLoading] = useState(true);
+  const [pushState, setPushState] = useState<TrackingPushState>(() => (token ? trackingPushState(token) : 'unsupported'));
+  const [pushBusy, setPushBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showOtp, setShowOtp] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
@@ -200,6 +205,18 @@ export default function TrackPage() {
       setCopied(key);
       setTimeout(() => setCopied(null), 1800);
     } catch { /* clipboard blocked — nothing useful to show */ }
+  };
+
+  const turnOnPush = async () => {
+    if (!token || pushBusy) return;
+    setPushBusy(true);
+    try {
+      setPushState(await enableTrackingPush(token));
+    } catch {
+      setPushState('off');
+    } finally {
+      setPushBusy(false);
+    }
   };
 
   const share = async () => {
@@ -311,6 +328,23 @@ export default function TrackPage() {
                 );
               })}
             </ol>
+          )}
+
+          {/* Push updates for this delivery (hidden where the browser can't do push). */}
+          {isActive && pushState === 'off' && (
+            <button
+              onClick={turnOnPush}
+              disabled={pushBusy}
+              className="w-full flex items-center justify-center gap-2 rounded-xl border border-nokael-border px-4 py-2.5 text-sm font-semibold text-nokael-accent hover:bg-nokael-accent-light disabled:opacity-60"
+            >
+              {pushBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bell className="w-4 h-4" />}
+              Notify me about this delivery
+            </button>
+          )}
+          {isActive && pushState === 'on' && (
+            <p className="flex items-center justify-center gap-2 text-[13px] text-nokael-text-muted">
+              <BellRing className="w-4 h-4 text-nokael-success" /> You'll get a notification at each step.
+            </p>
           )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-nokael-border">

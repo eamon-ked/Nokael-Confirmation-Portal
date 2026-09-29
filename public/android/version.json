@@ -1,7 +1,7 @@
 {
-  "versionCode": 2,
-  "versionName": "1.0.1",
-  "minVersionCode": 2,
+  "versionCode": 3,
+  "versionName": "1.0.2",
+  "minVersionCode": 3,
   "apkUrl": "https://coc.nokael.com/android/nokael-driver.apk",
-  "notes": "\"I have arrived\" button, clearer screen after pickup, and a warning if you confirm arrival while still far away."
+  "notes": "Notifications for new jobs, job changes and cancellations, and pickup reminders — even when the app is closed."
 }

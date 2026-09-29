@@ -40,6 +40,8 @@ export function HomeScreen() {
       container.session.toggleOnline();
       return;
     }
+    // Going online is when a driver wants job alerts; the tap lets the browser ask.
+    void container.push.enable();
     const granted = await container.locationPermission.request();
     if (granted) {
       if (!container.session.isOnline.get()) container.session.toggleOnline();

@@ -5,6 +5,7 @@ import {
   slotText, statusOf, type Campaign, type Job, type Membership,
 } from "./api";
 import JobPanel from "./JobPanel";
+import { disablePush, enablePush, getPushState, syncPush, type PushState } from "./push";
 
 const REFRESH_MS = 30_000;
 
@@ -32,6 +33,29 @@ export default function Dashboard({ email }: { email: string }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [, tick] = useState(0);
+  const [pushState, setPushState] = useState<PushState | null>(null);
+
+  useEffect(() => {
+    getPushState().then(setPushState).catch(() => setPushState("unsupported"));
+  }, []);
+  useEffect(() => {
+    if (businessId) void syncPush(businessId);
+  }, [businessId]);
+
+  async function togglePush() {
+    if (!businessId) return;
+    try {
+      setPushState(pushState === "on" ? await disablePush() : await enablePush(businessId));
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  // Signing out also stops this browser getting the company's delivery updates.
+  async function signOut() {
+    await disablePush().catch(() => undefined);
+    await supabase.auth.signOut();
+  }
 
   useEffect(() => {
     getMemberships()
@@ -118,7 +142,17 @@ export default function Dashboard({ email }: { email: string }) {
         )}
         <span className="spacer" />
         <span className="who">{email}</span>
-        <button className="link" onClick={() => supabase.auth.signOut()}>Sign out</button>
+        {(pushState === "on" || pushState === "off") && (
+          <button
+            className="link"
+            onClick={togglePush}
+            aria-pressed={pushState === "on"}
+            title={pushState === "on" ? "Delivery notifications are on for this browser" : "Get a notification when a driver is assigned, arrives, picks up and delivers"}
+          >
+            {pushState === "on" ? "Notifications on" : "Turn on notifications"}
+          </button>
+        )}
+        <button className="link" onClick={signOut}>Sign out</button>
       </header>
 
       <main className="content">

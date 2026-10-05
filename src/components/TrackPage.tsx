@@ -26,7 +26,8 @@ import {
 import { supabase, isSupabaseConfigured } from '@/src/lib/supabase';
 import { formatUAETime } from '@/src/lib/utils';
 import { Job } from '@/src/types';
-import { WHATSAPP_NUMBER, LINK_EXPIRY_HOURS, isLinkExpired, redirectToBooking } from '@/src/lib/constants';
+import { LINK_EXPIRY_HOURS, isLinkExpired, redirectToBooking } from '@/src/lib/constants';
+import { useOrgForToken, orgBrand, orgDispatchNumber, orgTimeZone } from '@/src/lib/org';
 import { downloadCocPdf, DriverContact, PodFix } from '@/src/lib/cocPdf';
 import DriverMap from './DriverMap';
 import CustodyTimeline from './CustodyTimeline';
@@ -122,6 +123,8 @@ function ActionButton({ href, icon: Icon, label, sub, primary, disabled }: {
 
 export default function TrackPage() {
   const { token } = useParams<{ token: string }>();
+  // The job's company: its name, dispatch number and time zone (Nokael until loaded).
+  useOrgForToken(token);
   const [search] = useSearchParams();
   const party: Party = search.get('for') === 'recipient' ? 'recipient' : 'sender';
 
@@ -143,7 +146,7 @@ export default function TrackPage() {
     if (err) {
       setError(isSupabaseConfigured ? 'We could not load this job right now. Please refresh, or contact dispatch.' : 'This tracking page is not configured. Please contact Nokael dispatch.');
     } else if (!data) {
-      setError('This tracking link is invalid or has expired. Please contact Nokael dispatch for a new link.');
+      setError(`This tracking link is invalid or has expired. Please contact ${orgBrand()} dispatch for a new link.`);
     } else {
       setJob(data as Job);
       setError(null);
@@ -222,7 +225,7 @@ export default function TrackPage() {
   const share = async () => {
     const url = window.location.href;
     if (navigator.share) {
-      try { await navigator.share({ title: `Nokael job ${job?.job_ref ?? ''}`, url }); } catch { /* cancelled */ }
+      try { await navigator.share({ title: `${orgBrand()} job ${job?.job_ref ?? ''}`, url }); } catch { /* cancelled */ }
     } else {
       copy(url, 'link');
     }
@@ -244,8 +247,8 @@ export default function TrackPage() {
           <AlertCircle className="w-10 h-10 text-amber-500 mx-auto" />
           <p className="text-nokael-text-main">{error}</p>
           <div className="grid grid-cols-2 gap-3 pt-2">
-            <ActionButton href={tel(WHATSAPP_NUMBER)} icon={Phone} label="Call dispatch" />
-            <ActionButton href={wa(WHATSAPP_NUMBER, 'Hi Nokael, my tracking link is not working.')} icon={MessageSquare} label="WhatsApp" />
+            <ActionButton href={tel(orgDispatchNumber())} icon={Phone} label="Call dispatch" />
+            <ActionButton href={wa(orgDispatchNumber(), `Hi ${orgBrand()}, my tracking link is not working.`)} icon={MessageSquare} label="WhatsApp" />
           </div>
         </div>
       </div>
@@ -255,7 +258,7 @@ export default function TrackPage() {
   const stage = stageOf(job);
   const closed = job.status === 'cancelled' || job.status === 'returned';
   const { title, sub } = headline(job, stage, party);
-  const dispatchMsg = `Hi Nokael, I'm enquiring about job ${job.job_ref}.`;
+  const dispatchMsg = `Hi ${orgBrand()}, I'm enquiring about job ${job.job_ref}.`;
 
   // The caller's own code is only useful until the handover it guards.
   const otp = job.otp_own?.trim();
@@ -301,7 +304,7 @@ export default function TrackPage() {
                 <p className="mt-3 inline-flex items-center gap-2 rounded-xl bg-nokael-accent-light px-3 py-2 text-sm font-semibold text-nokael-primary">
                   <Clock className="w-4 h-4 text-nokael-accent" />
                   {stage >= 2 ? 'Arriving' : 'Driver at pickup'} around{' '}
-                  {new Date(Date.now() + etaMinutes * 60000).toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Dubai' })}
+                  {new Date(Date.now() + etaMinutes * 60000).toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: orgTimeZone() })}
                   <span className="font-normal text-nokael-text-muted">· about {etaMinutes} min</span>
                 </p>
               )}
@@ -393,7 +396,7 @@ export default function TrackPage() {
               {party === 'sender'
                 ? 'Give this code to the driver only when you hand over the package.'
                 : 'Give this code to the driver only once you have the package in hand.'}{' '}
-              Nokael will never ask for it by phone.
+              {orgBrand()} will never ask for it by phone.
             </p>
             <div className="flex items-center gap-2">
               <div className="flex-1 h-14 rounded-xl bg-slate-50 border border-nokael-border flex items-center justify-center font-mono text-2xl font-bold tracking-[0.3em] whitespace-nowrap text-nokael-primary">
@@ -425,7 +428,7 @@ export default function TrackPage() {
                 <div className="min-w-0">
                   <p className="font-semibold text-nokael-primary truncate">{driver?.full_name || 'Your Nokael driver'}</p>
                   <p className="text-[13px] text-nokael-text-muted truncate">
-                    {[vehicle, driver?.vehicle_plate].filter(Boolean).join(' · ') || 'Verified Nokael courier'}
+                    {[vehicle, driver?.vehicle_plate].filter(Boolean).join(' · ') || `Verified ${orgBrand()} courier`}
                   </p>
                 </div>
               </div>
@@ -437,11 +440,11 @@ export default function TrackPage() {
               {isActive && driver?.phone && (
                 <>
                   <ActionButton primary href={tel(driver.phone)} icon={Phone} label="Call driver" sub={driver.full_name?.split(' ')[0] || undefined} />
-                  <ActionButton href={wa(driver.phone, `Hi, this is about Nokael job ${job.job_ref}.`)} icon={MessageSquare} label="Message driver" sub="WhatsApp" />
+                  <ActionButton href={wa(driver.phone, `Hi, this is about ${orgBrand()} job ${job.job_ref}.`)} icon={MessageSquare} label="Message driver" sub="WhatsApp" />
                 </>
               )}
-              <ActionButton primary={!(isActive && driver?.phone)} href={tel(WHATSAPP_NUMBER)} icon={Headphones} label="Call dispatch" sub="24/7" />
-              <ActionButton href={wa(WHATSAPP_NUMBER, dispatchMsg)} icon={MessageSquare} label="Message dispatch" sub="WhatsApp" />
+              <ActionButton primary={!(isActive && driver?.phone)} href={tel(orgDispatchNumber())} icon={Headphones} label="Call dispatch" sub="24/7" />
+              <ActionButton href={wa(orgDispatchNumber(), dispatchMsg)} icon={MessageSquare} label="Message dispatch" sub="WhatsApp" />
             </div>
           </section>
         )}
@@ -482,8 +485,8 @@ export default function TrackPage() {
 
         {closed && (
           <section className="grid grid-cols-2 gap-2.5">
-            <ActionButton primary href={tel(WHATSAPP_NUMBER)} icon={Headphones} label="Call dispatch" />
-            <ActionButton href={wa(WHATSAPP_NUMBER, dispatchMsg)} icon={MessageSquare} label="Message dispatch" sub="WhatsApp" />
+            <ActionButton primary href={tel(orgDispatchNumber())} icon={Headphones} label="Call dispatch" />
+            <ActionButton href={wa(orgDispatchNumber(), dispatchMsg)} icon={MessageSquare} label="Message dispatch" sub="WhatsApp" />
           </section>
         )}
 

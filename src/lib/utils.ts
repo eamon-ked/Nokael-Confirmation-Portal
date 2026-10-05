@@ -1,15 +1,21 @@
+import { orgLocale, orgTimeZone } from './org';
+
 /**
- * Formats a date string to UAE time (Asia/Dubai)
- * UAE is UTC+4, no DST.
+ * Formats a date in the job's company time zone (lib/org — Asia/Dubai for
+ * Nokael and until the company is known). Name kept for existing callers.
  */
 export function formatUAETime(date: string | Date | null): string {
   if (!date) return '';
-  
-  return new Intl.DateTimeFormat('en-AE', {
-    timeZone: 'Asia/Dubai',
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(date));
+
+  try {
+    return new Intl.DateTimeFormat(orgLocale(), {
+      timeZone: orgTimeZone(),
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(new Date(date));
+  } catch {
+    return new Date(date).toLocaleString();
+  }
 }
 
 /**

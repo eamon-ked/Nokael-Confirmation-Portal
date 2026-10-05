@@ -1,5 +1,5 @@
 import * as DriverJson from "./driverJson";
-import type { ArrivalRecord, Driver, HandoffKind, Job, JobOutcome } from "./model";
+import { setDriverOrg, type ArrivalRecord, type Driver, type HandoffKind, type Job, type JobOutcome } from "./model";
 import { safeRead, safeWrite, SessionRpc, SessionTokens, SupabaseRpcClient, type RpcResult } from "./rpc";
 import { Store } from "./store";
 
@@ -95,6 +95,8 @@ export class RemoteAuthRepository implements AuthRepository {
           if (typeof token !== "string") throw new DriverJson.ShapeError("token");
           // The token is returned exactly once; persist it before anything else.
           this.tokens.set(token);
+          // Company time zone / currency; best-effort, defaults stay until it answers.
+          void this.session.call("driver_me").then((me) => { if (me.type === "ok") setDriverOrg(me.body.org); }).catch(() => undefined);
           return { type: "success", driver: DriverJson.driver(result.body.driver) };
         } catch {
           this.tokens.clear();
@@ -117,6 +119,7 @@ export class RemoteAuthRepository implements AuthRepository {
     switch (result.type) {
       case "ok":
         try {
+          setDriverOrg(result.body.org);
           return { type: "restored", driver: DriverJson.driver(result.body.driver) };
         } catch {
           return { type: "unreachable" };

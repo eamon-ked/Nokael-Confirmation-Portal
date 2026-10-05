@@ -3,10 +3,11 @@ import { useParams, Link } from 'react-router-dom';
 import { supabase, isSupabaseConfigured } from '@/src/lib/supabase';
 import { formatUAETime, isWhatsAppBrowser } from '@/src/lib/utils';
 import { Job, Step, STEP_CONFIG, VALID_STEPS } from '@/src/types';
-import { DISPATCH_WA_URL, WHATSAPP_NUMBER, isLinkExpired, redirectToBooking } from '@/src/lib/constants';
+import { isLinkExpired, redirectToBooking } from '@/src/lib/constants';
+import { useOrgForToken, orgBrand, orgDispatchNumber } from '@/src/lib/org';
 
 const getContactPhone = (phone: string | null | undefined) => {
-  const p = phone || WHATSAPP_NUMBER;
+  const p = phone || orgDispatchNumber();
   if (!p) return '';
   return p.startsWith('+') ? p : `+${p}`;
 };
@@ -574,7 +575,7 @@ function ClosedJobNotice({ job }: { job: Job }) {
         </p>
         <p className="text-nokael-text-muted text-[13px] font-medium">{job.job_ref}</p>
       </div>
-      <a href={DISPATCH_WA_URL} className="text-nokael-accent font-medium text-sm underline underline-offset-4">Contact Nokael Dispatch</a>
+      <a href={`https://wa.me/${orgDispatchNumber()}`} className="text-nokael-accent font-medium text-sm underline underline-offset-4">Contact {orgBrand()} Dispatch</a>
     </div>
   );
 }
@@ -742,13 +743,13 @@ function StepCompletedView({ job, step, config }: { job: Job; step: Step; config
     }
     if (job.status === 'driver_pickup' || job.status === 'driver_delivery') {
       return {
-        role: 'Nokael Courier',
+        role: `${orgBrand()} Courier`,
         name: 'Certified Courier Team',
-        phone: job.driver_phone || WHATSAPP_NUMBER,
+        phone: job.driver_phone || orgDispatchNumber(),
         statusLabel: 'In Transit',
         statusColor: 'text-blue-700 bg-blue-50 border-blue-200',
         dotColor: 'bg-blue-500',
-        custodyText: 'The package is in secure possession of our authorized courier, moving under Nokael Custody Chain protocol.',
+        custodyText: `The package is in secure possession of our authorized courier, moving under ${orgBrand()} Custody Chain protocol.`,
         locationLabel: 'Headed Towards',
         locationValue: `${job.delivery_location}, ${job.delivery_emirate}`,
         timestampLabel: 'Collection Confirmed',
@@ -798,7 +799,7 @@ function StepCompletedView({ job, step, config }: { job: Job; step: Step; config
               {isPickup ? 'Pickup Step Secured' : 'Delivery Step Secured'}
             </h2>
             <p className="text-nokael-text-muted text-sm max-w-sm mx-auto font-medium leading-relaxed">
-              Both parties verified. This handover is cryptographically anchored in the Nokael custody log.
+              Both parties verified. This handover is cryptographically anchored in the {orgBrand()} custody log.
             </p>
           </div>
           {custodian.timestamp && (
@@ -952,6 +953,8 @@ function LogisticsDetail({ job }: { job: Job }) {
 
 export default function ConfirmationPage() {
   const { token, step: stepParam } = useParams<{ token: string; step: string }>();
+  // The job's company: name, dispatch number, time zone (Nokael until loaded).
+  useOrgForToken(token);
   const step = stepParam as Step;
 
   const [job, setJob] = useState<Job | null>(null);
@@ -1178,7 +1181,7 @@ export default function ConfirmationPage() {
         const cached = await getCachedJob(token!);
         if (cached) { setJob(cached.job_data as Job); setOnline(false); }
         else setError('Unable to load job data. Please try again.');
-      } catch { setError('Something went wrong. Please try again or contact Nokael dispatch.'); }
+      } catch { setError(`Something went wrong. Please try again or contact ${orgBrand()} dispatch.`); }
     } finally {
       setLoading(false);
     }
@@ -1320,7 +1323,7 @@ export default function ConfirmationPage() {
             build can be redeployed correctly.
           </p>
         </div>
-        <a href={DISPATCH_WA_URL} className="nokael-button bg-[#059669] gap-2 flex items-center">
+        <a href={`https://wa.me/${orgDispatchNumber()}`} className="nokael-button bg-[#059669] gap-2 flex items-center">
           <MessageSquare className="w-5 h-5" />WhatsApp Nokael Dispatch
         </a>
       </div>
@@ -1346,7 +1349,7 @@ export default function ConfirmationPage() {
           <h1 className="text-2xl font-black text-nokael-primary uppercase tracking-tighter italic">SECURITY LOCKOUT</h1>
           <p className="text-nokael-text-muted text-sm leading-relaxed max-w-[300px]">Too many incorrect secure code attempts. For safety, this job has been locked. Please contact our operations team to verify and reset.</p>
         </div>
-        <a href={DISPATCH_WA_URL} className="nokael-button bg-[#059669] gap-2 flex items-center">
+        <a href={`https://wa.me/${orgDispatchNumber()}`} className="nokael-button bg-[#059669] gap-2 flex items-center">
           <MessageSquare className="w-5 h-5" />WhatsApp Nokael Dispatch
         </a>
       </div>
@@ -1363,7 +1366,7 @@ export default function ConfirmationPage() {
           <h1 className="text-2xl font-bold text-nokael-primary">{error ? 'Unable to Load Job' : 'Invalid Link'}</h1>
           <p className="text-nokael-text-muted text-sm max-w-md mx-auto">{error || 'This link is not valid or has expired.'}</p>
         </div>
-        <a href={DISPATCH_WA_URL} className="text-nokael-accent font-bold text-sm underline underline-offset-4">Contact Nokael Dispatch</a>
+        <a href={`https://wa.me/${orgDispatchNumber()}`} className="text-nokael-accent font-bold text-sm underline underline-offset-4">Contact {orgBrand()} Dispatch</a>
       </div>
     );
   }
@@ -1470,7 +1473,7 @@ export default function ConfirmationPage() {
       <footer className="pt-12 mt-12 border-t border-nokael-border space-y-8 pb-12">
         <LogisticsDetail job={job!} />
         <div>
-          <a href={DISPATCH_WA_URL} className="w-full bg-white border-2 border-nokael-border p-6 rounded-[32px] text-nokael-primary font-black no-underline flex items-center justify-center gap-4 hover:bg-slate-50 transition-all">
+          <a href={`https://wa.me/${orgDispatchNumber()}`} className="w-full bg-white border-2 border-nokael-border p-6 rounded-[32px] text-nokael-primary font-black no-underline flex items-center justify-center gap-4 hover:bg-slate-50 transition-all">
             <MessageSquare className="w-6 h-6" />
             <span className="text-sm uppercase tracking-wider">Contact Response Team</span>
           </a>

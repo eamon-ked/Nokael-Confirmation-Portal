@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { container } from "../../logic/container";
-import { calculateStats, cargo, clientName, formatAed, isStarted, scheduledTime, type Job } from "../../logic/model";
+import { calculateStats, cargo, clientName, currencyCode, formatAed, isStarted, scheduledTime, type Job } from "../../logic/model";
 import { useStore } from "../../logic/store";
 import { ConfirmSheet, Emoji, SectionLabel, Tap, toast, useThemeColor } from "../components";
 import { locationHelpSteps } from "../../logic/location";
@@ -100,7 +100,7 @@ export function HomeScreen() {
           <div className="row" style={{ gap: 12 }}>
             <StatTile label="Today's Jobs" value={String(stats.jobsToday)} />
             <StatTile label="Completed" value={String(stats.completed)} />
-            <StatTile label="Earnings" value={`AED ${formatAed(stats.earningsAed)}`} />
+            <StatTile label="Earnings" value={`${currencyCode()} ${formatAed(stats.earningsAed)}`} />
           </div>
         </div>
       </div>

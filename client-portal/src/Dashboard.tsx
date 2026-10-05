@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { supabase, SUPPORT_WHATSAPP } from "./supabase";
+import { supabase } from "./supabase";
 import {
-  ago, dayKey, dayLabel, download, getCampaigns, getJobs, getMemberships, getPodReport, podCsv,
-  slotText, statusOf, type Campaign, type Job, type Membership,
+  ago, brand, dayKey, dayLabel, download, getCampaigns, getJobs, getMemberships, getPodReport, loadOrg, podCsv,
+  slotText, statusOf, supportWhatsApp, type Campaign, type Job, type Membership,
 } from "./api";
 import JobPanel from "./JobPanel";
 import { disablePush, enablePush, getPushState, syncPush, type PushState } from "./push";
@@ -37,6 +37,8 @@ export default function Dashboard({ email }: { email: string }) {
 
   useEffect(() => {
     getPushState().then(setPushState).catch(() => setPushState("unsupported"));
+    // The delivery company's name, support number and time zone.
+    loadOrg().then((changed) => changed && tick((n) => n + 1)).catch(() => undefined);
   }, []);
   useEffect(() => {
     if (businessId) void syncPush(businessId);
@@ -121,9 +123,9 @@ export default function Dashboard({ email }: { email: string }) {
   if (memberships && memberships.length === 0) {
     return (
       <main className="empty-page">
-        <p className="wordmark">nokael</p>
+        <p className="wordmark">{brand().toLowerCase()}</p>
         <h1>Your account isn't linked to a company yet</h1>
-        <p className="muted">Signed in as {email}. Nokael links your login to your company's deliveries. <a href={`https://wa.me/${SUPPORT_WHATSAPP}`}>Message us on WhatsApp</a> and we'll set it up.</p>
+        <p className="muted">Signed in as {email}. {brand()} links your login to your company's deliveries. <a href={`https://wa.me/${supportWhatsApp()}`}>Message us on WhatsApp</a> and we'll set it up.</p>
         <button className="link" onClick={() => supabase.auth.signOut()}>Sign out</button>
       </main>
     );
@@ -132,7 +134,7 @@ export default function Dashboard({ email }: { email: string }) {
   return (
     <div className="app">
       <header className="top">
-        <p className="wordmark">nokael</p>
+        <p className="wordmark">{brand().toLowerCase()}</p>
         {memberships && memberships.length > 1 ? (
           <select aria-label="Company" value={businessId ?? ""} onChange={(e) => setBusinessId(e.target.value)}>
             {memberships.map((m) => <option key={m.business_id} value={m.business_id}>{m.company_name}</option>)}
@@ -211,7 +213,7 @@ export default function Dashboard({ email }: { email: string }) {
         {error && <p className="error banner" role="alert">{error}</p>}
         {!jobs && !error && <p className="muted loading">Loading deliveries…</p>}
         {jobs && jobs.length === 0 && (
-          <p className="muted empty">No deliveries booked here yet. Once Nokael schedules them, they'll appear with their time slots.</p>
+          <p className="muted empty">No deliveries booked here yet. Once {brand()} schedules them, they'll appear with their time slots.</p>
         )}
 
         {days.map((d) => {
@@ -236,7 +238,7 @@ export default function Dashboard({ email }: { email: string }) {
                         <span className={`status ${s.tone}`}>{s.label}</span>
                         <span className="row-proof">
                           {j.delivery_verified_by === "otp" && <span title="Confirmed with the recipient's code">Code verified</span>}
-                          {j.delivery_verified_by === "ops_override" && <span title="Confirmed by Nokael operations">Confirmed by Nokael</span>}
+                          {j.delivery_verified_by === "ops_override" && <span title={`Confirmed by ${brand()} operations`}>Confirmed by {brand()}</span>}
                         </span>
                       </button>
                     </li>

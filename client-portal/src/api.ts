@@ -1,4 +1,4 @@
-import { supabase } from "./supabase";
+import { supabase, SUPPORT_WHATSAPP } from "./supabase";
 
 export type Membership = { business_id: string; company_name: string; role: "admin" | "viewer" };
 
@@ -63,17 +63,56 @@ export function statusOf(job: Job): { label: string; tone: Tone } {
   }
 }
 
+// ---------- The delivery company (organizations) this login belongs to ----------
+// Nokael until client_org answers (or on an older backend without it).
+
+type OrgProfile = {
+  name: string;
+  slug: string;
+  branding?: { display_name?: string; whatsapp?: string; support_phone?: string };
+  settings?: { timezone?: string; region_label?: string };
+};
+let org: OrgProfile | null = null;
+
+export const brand = () => org?.branding?.display_name?.trim() || org?.name || "Nokael";
+export const supportWhatsApp = () =>
+  org ? (org.branding?.whatsapp || org.branding?.support_phone || "").replace(/\D/g, "") || (org.slug === "nokael" ? SUPPORT_WHATSAPP : "") : SUPPORT_WHATSAPP;
+export const regionLabel = () => org?.settings?.region_label || "Emirate";
+
+/** Loads the company profile once; true when it changed what's shown. */
+export async function loadOrg(): Promise<boolean> {
+  const { data, error } = await supabase.rpc("client_org");
+  if (error || !data) return false;
+  org = data as OrgProfile;
+  setZone(org.settings?.timezone);
+  return true;
+}
+
 export const verifiedLabel = (v: Job["delivery_verified_by"]) =>
-  v === "otp" ? "Confirmed with the recipient's code" : v === "ops_override" ? "Confirmed by Nokael operations" : null;
+  v === "otp" ? "Confirmed with the recipient's code" : v === "ops_override" ? `Confirmed by ${brand()} operations` : null;
 
-// ---------- Time: always shown in UAE time, whatever the viewer's device says ----------
+// ---------- Time: always shown in the company's time zone, whatever the viewer's device says ----------
 
-const TZ = "Asia/Dubai";
+let TZ = "Asia/Dubai";
 const fmt = (opts: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("en-GB", { timeZone: TZ, ...opts });
-const timeF = fmt({ hour: "2-digit", minute: "2-digit", hour12: false });
-const dayKeyF = fmt({ year: "numeric", month: "2-digit", day: "2-digit" });
-const dayLabelF = fmt({ weekday: "short", day: "numeric", month: "short" });
-const fullF = fmt({ day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false });
+let timeF = fmt({ hour: "2-digit", minute: "2-digit", hour12: false });
+let dayKeyF = fmt({ year: "numeric", month: "2-digit", day: "2-digit" });
+let dayLabelF = fmt({ weekday: "short", day: "numeric", month: "short" });
+let fullF = fmt({ day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false });
+
+function setZone(zone: string | undefined) {
+  if (!zone || zone === TZ) return;
+  const previous = TZ;
+  try {
+    TZ = zone;
+    timeF = fmt({ hour: "2-digit", minute: "2-digit", hour12: false });
+    dayKeyF = fmt({ year: "numeric", month: "2-digit", day: "2-digit" });
+    dayLabelF = fmt({ weekday: "short", day: "numeric", month: "short" });
+    fullF = fmt({ day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false });
+  } catch {
+    TZ = previous; // unknown zone name
+  }
+}
 
 export const time = (iso: string | null) => (iso ? timeF.format(new Date(iso)) : "");
 export const full = (iso: string | null) => (iso ? fullF.format(new Date(iso)) : "");
@@ -98,7 +137,7 @@ export function ago(iso: string | null): string {
 const POD_COLUMNS: [string, string, "text" | "time" | "method" | "num"][] = [
   ["job_ref", "Reference", "text"],
   ["recipient_name", "Recipient", "text"],
-  ["delivery_emirate", "Emirate", "text"],
+  ["delivery_emirate", "Region", "text"],
   ["delivery_location", "Address", "text"],
   ["slot_start", "Slot start", "time"],
   ["slot_end", "Slot end", "time"],
@@ -124,13 +163,13 @@ const csvCell = (v: unknown) => {
 };
 
 export function podCsv(rows: PodRow[]): string {
-  const head = [...POD_COLUMNS.map((c) => c[1]), "Handover map link"];
+  const head = [...POD_COLUMNS.map((c) => (c[0] === "delivery_emirate" ? regionLabel() : c[1])), "Handover map link"];
   const lines = rows.map((r) => {
     const cells = POD_COLUMNS.map(([key, , kind]) => {
       const v = r[key];
       if (v == null) return "";
       if (kind === "time") return full(String(v));
-      if (kind === "method") return v === "otp" ? "Recipient code (OTP)" : v === "ops_override" ? "Nokael operations" : String(v);
+      if (kind === "method") return v === "otp" ? "Recipient code (OTP)" : v === "ops_override" ? `${brand()} operations` : String(v);
       if (kind === "num" && typeof v === "number") return key.endsWith("_lat") || key.endsWith("_lng") ? v.toFixed(6) : String(Math.round(v));
       return String(v);
     });

@@ -100,10 +100,31 @@ export const cargo = (job: Job) => {
   return text.charAt(0).toUpperCase() + text.slice(1);
 };
 
-// Jobs are all Dubai <-> Abu Dhabi; show times in local UAE time whatever the phone's zone is.
-const ZONE = "Asia/Dubai";
-const dateParts = new Intl.DateTimeFormat("en-US", { timeZone: ZONE, weekday: "short", day: "numeric", month: "short" });
-const timeFormat = new Intl.DateTimeFormat("en-US", { timeZone: ZONE, hour: "numeric", minute: "2-digit", hour12: true });
+// Show times in the driver's company time zone whatever the phone's zone is,
+// and money in its currency. Both come from driver_me's `org` (Asia/Dubai /
+// AED — Nokael — until it's known or on an older backend).
+let zone = "Asia/Dubai";
+let currency = "AED";
+let dateParts = new Intl.DateTimeFormat("en-US", { timeZone: zone, weekday: "short", day: "numeric", month: "short" });
+let timeFormat = new Intl.DateTimeFormat("en-US", { timeZone: zone, hour: "numeric", minute: "2-digit", hour12: true });
+
+/** Apply the company profile returned by driver_me (`body.org`). Ignores anything malformed. */
+export function setDriverOrg(org: unknown) {
+  const settings = (org as { settings?: { timezone?: unknown; currency?: unknown } } | null)?.settings;
+  if (typeof settings?.currency === "string" && /^[A-Z]{3}$/.test(settings.currency)) currency = settings.currency;
+  if (typeof settings?.timezone === "string" && settings.timezone !== zone) {
+    try {
+      dateParts = new Intl.DateTimeFormat("en-US", { timeZone: settings.timezone, weekday: "short", day: "numeric", month: "short" });
+      timeFormat = new Intl.DateTimeFormat("en-US", { timeZone: settings.timezone, hour: "numeric", minute: "2-digit", hour12: true });
+      zone = settings.timezone;
+    } catch {
+      // unknown zone name — keep the previous one
+    }
+  }
+}
+
+/** ISO 4217 code for payouts ("AED" for Nokael). */
+export const currencyCode = () => currency;
 
 /** e.g. "Sat, 19 Sep"; empty when unscheduled. */
 export const scheduledDate = (job: Job) => {

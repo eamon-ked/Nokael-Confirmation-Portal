@@ -1,8 +1,9 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Job } from '../types';
+import { useLiveRoute } from '../lib/route';
 import { Loader2, Navigation, Clock } from 'lucide-react';
 import { renderToString } from 'react-dom/server';
 
@@ -55,98 +56,43 @@ interface DriverMapProps {
   onEta?: (minutes: number | null) => void;
 }
 
-// Utility to calculate distance in meters (Haversine)
-function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const R = 6371e3; // metres
-  const φ1 = lat1 * Math.PI/180;
-  const φ2 = lat2 * Math.PI/180;
-  const Δφ = (lat2-lat1) * Math.PI/180;
-  const Δλ = (lon2-lon1) * Math.PI/180;
-
-  const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-          Math.cos(φ1) * Math.cos(φ2) *
-          Math.sin(Δλ/2) * Math.sin(Δλ/2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-
-  return R * c;
-}
-
-// Map Updater Component
-function MapUpdater({ center, route }: { center: [number, number], route?: [number, number][] }) {
+// Fit to the route when a new one is fetched (not on every position update,
+// which would keep snapping the view back); follow the driver until then.
+function MapUpdater({ center, route, routeVersion }: { center: [number, number], route: [number, number][], routeVersion: number | null }) {
   const map = useMap();
-  
+
   useEffect(() => {
-    if (route && route.length > 0) {
-      const bounds = L.latLngBounds(route);
-      map.fitBounds(bounds, { padding: [50, 50] });
-    } else {
-      map.setView(center, map.getZoom());
+    if (routeVersion != null && route.length > 0) {
+      map.fitBounds(L.latLngBounds(route), { padding: [50, 50] });
     }
-  }, [center, route, map]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeVersion, map]);
+
+  useEffect(() => {
+    if (routeVersion == null) map.setView(center, map.getZoom());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [center[0], center[1], routeVersion, map]);
 
   return null;
 }
 
 export default function DriverMap({ job, onEta }: DriverMapProps) {
-  const [etaMinutes, setEtaMinutes] = useState<number | null>(null);
-  const [routeData, setRouteData] = useState<[number, number][]>([]);
   // Drop back to OSM if Mapbox rejects the tiles (bad/expired token), rather than a blank map.
   const [mapboxFailed, setMapboxFailed] = useState(false);
-  const lastFetchRef = useRef<{ lat: number; lng: number; time: number; dest: string } | null>(null);
 
   const pickup: [number, number] | null = job.pickup_lat && job.pickup_lng ? [job.pickup_lat, job.pickup_lng] : null;
   const delivery: [number, number] | null = job.delivery_lat && job.delivery_lng ? [job.delivery_lat, job.delivery_lng] : null;
   const driver: [number, number] | null = job.driver_lat && job.driver_lng ? [job.driver_lat, job.driver_lng] : null;
 
-  // Next stop: pickup until the package is collected, then the drop-off.
-  // No estimate once the driver has arrived at it or the job is over.
-  const collected = !!(job.driver_pickup_at || job.client_pickup_at);
-  const arrivedAtNext = collected ? !!job.driver_arrived_delivery_at : !!job.driver_arrived_pickup_at;
-  const finished = ['completed', 'cancelled', 'returned'].includes(job.status);
-  const destination = finished || arrivedAtNext ? null : collected ? delivery : pickup;
-  const destKey = destination ? destination.join(',') : '';
+  // Road route + ETA to the next stop (pickup until collected, then drop-off;
+  // none once the driver has arrived there or the job is over). lib/route
+  // decides when to look the route up again — same rules as the dashboard.
+  const live = useLiveRoute(job, driver, job.driver_updated_at);
+  const collected = live.stop?.kind === 'delivery';
+  const etaMinutes = live.stop?.arrived ? null : live.minutes;
+  const routeData = live.coords;
 
   useEffect(() => { onEta?.(etaMinutes); }, [etaMinutes, onEta]);
-
-  useEffect(() => {
-    const fetchRoute = async () => {
-      if (!MAPBOX_TOKEN || !driver || !destination) {
-        setEtaMinutes(null);
-        setRouteData([]);
-        return;
-      }
-
-      // Refetch when the next stop changes, the driver moved > 200 m, or every 2 minutes.
-      const now = Date.now();
-      if (lastFetchRef.current && lastFetchRef.current.dest === destKey) {
-        const dist = getDistance(driver[0], driver[1], lastFetchRef.current.lat, lastFetchRef.current.lng);
-        const timeDiff = now - lastFetchRef.current.time;
-        if (dist < 200 && timeDiff < 120000) return;
-      }
-
-      try {
-        const query = await fetch(
-          `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${driver[1]},${driver[0]};${destination[1]},${destination[0]}?geometries=geojson&access_token=${MAPBOX_TOKEN}`
-        );
-        const json = await query.json();
-        
-        if (json.routes && json.routes[0]) {
-          const route = json.routes[0];
-          // Mapbox returns [lng, lat], Leaflet needs [lat, lng]
-          const coords = route.geometry.coordinates.map((c: [number, number]) => [c[1], c[0]]);
-          setRouteData(coords);
-          
-          setEtaMinutes(Math.max(1, Math.round(route.duration / 60)));
-          lastFetchRef.current = { lat: driver[0], lng: driver[1], time: now, dest: destKey };
-        }
-      } catch (err) {
-        console.error('Mapbox fetch error:', err);
-      }
-    };
-
-    fetchRoute();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [job.driver_lat, job.driver_lng, destKey]);
 
   const mapCenter: [number, number] = driver || pickup || [25.2048, 55.2708];
 
@@ -188,7 +134,7 @@ export default function DriverMap({ job, onEta }: DriverMapProps) {
             />
           )}
 
-          <MapUpdater center={mapCenter} route={routeData} />
+          <MapUpdater center={mapCenter} route={routeData} routeVersion={live.fetchedAt} />
         </MapContainer>
 
         {/* TOP OVERLAY: LIVE INDICATOR */}

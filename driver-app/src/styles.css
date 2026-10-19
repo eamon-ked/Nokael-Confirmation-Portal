@@ -322,6 +322,8 @@ body {
   line-height: 17px;
   color: var(--gray-800);
   overflow-wrap: anywhere;
+  /* Special instructions arrive as labelled paragraphs (PICKUP — …). */
+  white-space: pre-line;
 }
 
 /* --- OTP boxes & number pad ---------------------------------------------- */
@@ -477,6 +479,18 @@ body {
   font-weight: 900;
   text-align: center;
   padding: 6px 12px;
+}
+
+/* Android phones mid-delivery: finish here, then switch to the Android app. */
+.android-banner {
+  display: block;
+  background: var(--blue);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  padding: 8px 12px;
+  text-decoration: none;
 }
 
 /* --- Spinner (CircularProgressIndicator) --------------------------------- */

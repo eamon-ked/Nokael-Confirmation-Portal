@@ -3,6 +3,7 @@ import { container } from "./logic/container";
 import { useStore } from "./logic/store";
 import { ToastHost } from "./ui/components";
 import { NavProvider, parseHash, useNav, type Route } from "./ui/nav";
+import { AndroidSwitchBanner, AndroidWall, isAndroidPhone, useMidDelivery } from "./ui/screens/androidWall";
 import { LoginScreen, StartupScreen, VerifyScreen } from "./ui/screens/auth";
 import { ResultScreen, ReturnScreen } from "./ui/screens/finish";
 import { HomeScreen } from "./ui/screens/home";
@@ -21,10 +22,21 @@ function resumeTarget(): Route[] {
 }
 
 const initialResume = resumeTarget();
+const onAndroid = isAndroidPhone();
 
 export default function App() {
+  // Android phones use the Android app; a delivery already under way can be finished here.
+  const midDelivery = useMidDelivery();
+  if (onAndroid && !midDelivery) {
+    return (
+      <div className="app">
+        <AndroidWall />
+      </div>
+    );
+  }
   return (
     <div className="app">
+      {onAndroid && <AndroidSwitchBanner />}
       <NetworkStrip />
       <NavProvider>{(route) => <Screens route={route} />}</NavProvider>
       <ToastHost />

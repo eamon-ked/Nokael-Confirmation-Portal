@@ -1,5 +1,6 @@
 import { useState, useEffect, Suspense, lazy } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { useLinkSeen } from '@/src/lib/linkSeen';
 import { supabase, isSupabaseConfigured } from '@/src/lib/supabase';
 import { formatUAETime, isWhatsAppBrowser } from '@/src/lib/utils';
 import { Job, Step, STEP_CONFIG, VALID_STEPS } from '@/src/types';
@@ -955,6 +956,8 @@ export default function ConfirmationPage() {
   const { token, step: stepParam } = useParams<{ token: string; step: string }>();
   // The job's company: name, dispatch number, time zone (Nokael until loaded).
   useOrgForToken(token);
+  // Client links only (the server ignores driver tokens): lets dispatch see it was opened.
+  useLinkSeen(token);
   const step = stepParam as Step;
 
   const [job, setJob] = useState<Job | null>(null);

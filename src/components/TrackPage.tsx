@@ -32,6 +32,7 @@ import { downloadCocPdf, DriverContact, PodFix } from '@/src/lib/cocPdf';
 import DriverMap from './DriverMap';
 import CustodyTimeline from './CustodyTimeline';
 import { enableTrackingPush, trackingPushState, type TrackingPushState } from '@/src/lib/push';
+import { useLinkSeen } from '@/src/lib/linkSeen';
 
 /**
  * Client tracking page — /:token/track (sender) or /:token/track?for=recipient.
@@ -125,6 +126,8 @@ export default function TrackPage() {
   const { token } = useParams<{ token: string }>();
   // The job's company: its name, dispatch number and time zone (Nokael until loaded).
   useOrgForToken(token);
+  // Let dispatch see the client has opened this link (and when they last looked).
+  useLinkSeen(token);
   const [search] = useSearchParams();
   const party: Party = search.get('for') === 'recipient' ? 'recipient' : 'sender';
 

@@ -15,6 +15,7 @@ import {
   rebook,
   setAppManifest,
 } from '@/src/lib/clientApp';
+import { ReviewCard } from './AfterDelivery';
 
 /**
  * The installable client app — /app/:appToken.
@@ -86,7 +87,9 @@ export default function ClientAppPage() {
 
   const brand = orgBrand();
   const logo = orgLogoUrl() || '/nokael-logo.jpg';
-  const firstName = data.name?.trim().split(/\s+/)[0];
+  // "Mr charbel Tamer" → "Charbel": skip titles, capitalise.
+  const first = (data.name || '').trim().split(/\s+/).find((w) => !/^(mr|mrs|ms|miss|dr|eng|sheikh)\.?$/i.test(w));
+  const firstName = first ? first.charAt(0).toUpperCase() + first.slice(1) : undefined;
 
   return (
     <div className="min-h-[100dvh] pb-[max(2rem,env(safe-area-inset-bottom))]">
@@ -110,7 +113,8 @@ export default function ClientAppPage() {
           <Home
             data={data}
             firstName={firstName}
-            showInstallSteps={search.get('install') === '1'}
+            reviewToken={search.get('review')}
+            showInstallSteps={search.get('install') === '1' || !!search.get('review')}
             onBook={(from, reverse) => setView({ kind: 'book', from, reverse })}
           />
         )}
@@ -144,8 +148,9 @@ export default function ClientAppPage() {
   );
 }
 
-function Home({ data, firstName, showInstallSteps, onBook }: {
-  data: ClientAppData; firstName?: string; showInstallSteps: boolean; onBook: (from?: RecentRoute, reverse?: boolean) => void;
+function Home({ data, firstName, reviewToken, showInstallSteps, onBook }: {
+  data: ClientAppData; firstName?: string; reviewToken: string | null; showInstallSteps: boolean;
+  onBook: (from?: RecentRoute, reverse?: boolean) => void;
 }) {
   const brand = orgBrand();
   const [canPrompt, setCanPrompt] = useState(hasInstallPrompt);
@@ -163,6 +168,9 @@ function Home({ data, firstName, showInstallSteps, onBook }: {
         <h1 className="text-2xl font-bold text-nokael-primary">{firstName ? `Hi ${firstName}` : 'Welcome back'}</h1>
         <p className="text-sm text-nokael-text-muted">Where are we taking it today?</p>
       </section>
+
+      {/* Arrived from an expired delivery link: ask for the review first. */}
+      {reviewToken && <ReviewCard token={reviewToken} staff={false} />}
 
       {showInstall && (
         <section className="nokael-card space-y-3 border-nokael-accent/30">

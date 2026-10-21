@@ -28,7 +28,7 @@ import { formatUAETime } from '@/src/lib/utils';
 import { Job } from '@/src/types';
 import { BOOK_URL, LINK_EXPIRY_HOURS, isLinkExpired, redirectToBooking } from '@/src/lib/constants';
 import { useOrgForToken, orgBrand, orgDispatchNumber, orgLogoUrl, orgTimeZone } from '@/src/lib/org';
-import { issueAppToken } from '@/src/lib/clientApp';
+import { appUrl, issueAppToken } from '@/src/lib/clientApp';
 import { downloadCocPdf, DriverContact, PodFix } from '@/src/lib/cocPdf';
 import DriverMap from './DriverMap';
 import CustodyTimeline from './CustodyTimeline';
@@ -150,11 +150,14 @@ export default function TrackPage() {
     if (!token) return;
     const { data, error: err } = await supabase.rpc('get_job_by_token', { p_token: token }).maybeSingle();
     if (isLinkExpired(err)) {
-      // Expired = delivered over 24h ago. Job details stay hidden, but a client
-      // link still gets the survey + install card (client_app_issue ignores the
-      // expiry). Driver links have no app token, so they go to booking.
-      // (Dispatch's ?staff=1 preview only opens client links and must not write.)
-      if (staffView || await issueAppToken(token)) { setExpired(true); setLoading(false); return; }
+      // Expired = delivered over 24h ago. Job details stay hidden; a client link
+      // goes straight to its client app (review on top, re-book, install) —
+      // client_app_issue ignores the expiry. Driver links have no app token, so
+      // they go to booking. Dispatch's ?staff=1 preview must not write, so it
+      // gets an in-page preview instead.
+      if (staffView) { setExpired(true); setLoading(false); return; }
+      const appToken = await issueAppToken(token);
+      if (appToken) { window.location.replace(`${appUrl(appToken)}?review=${encodeURIComponent(token)}`); return; }
       return redirectToBooking();
     }
     if (err) {
@@ -264,18 +267,11 @@ export default function TrackPage() {
           </div>
         </header>
         <main className="max-w-2xl mx-auto px-4 pt-5 space-y-4">
-          <section className="nokael-card space-y-2">
-            <CheckCircle2 className="w-8 h-8 text-nokael-success" />
-            <h1 className="text-2xl font-bold text-nokael-primary leading-tight">Your delivery is complete</h1>
-            <p className="text-sm text-nokael-text-muted">
-              Delivery details close {LINK_EXPIRY_HOURS} hours after handover to keep them private. Need the custody certificate? Dispatch can send it to you.
-            </p>
-          </section>
-          <AfterDelivery token={token} staff={staffView} />
-          <section className="grid grid-cols-2 gap-2.5">
-            <ActionButton primary href={`${BOOK_URL}?expired=1`} icon={Package} label="Book a delivery" />
-            <ActionButton href={wa(orgDispatchNumber(), `Hi ${orgBrand()}, could you send me the custody certificate for my delivery?`)} icon={MessageSquare} label="Message dispatch" sub="WhatsApp" />
-          </section>
+          <p className="text-[13px] text-nokael-text-muted px-1">
+            Staff preview. This link is over {LINK_EXPIRY_HOURS} hours past delivery, so the client lands on their
+            re-book screen with this review on top. Nothing here is saved.
+          </p>
+          <AfterDelivery token={token} staff />
         </main>
       </div>
     );

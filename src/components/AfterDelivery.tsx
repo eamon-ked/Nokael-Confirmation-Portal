@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CheckCircle2, Download, Loader2, MessageSquare, Share, Smartphone, Star } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Download, Loader2, MessageSquare, Plus, Share, Smartphone, Star } from 'lucide-react';
 import { orgBrand, orgDispatchNumber, useOrgForToken } from '@/src/lib/org';
 import {
   LEAD_SOURCES,
@@ -18,18 +18,17 @@ import {
 } from '@/src/lib/clientApp';
 
 /**
- * Shown on the tracking page once a job is completed, for sender and
- * recipient alike: a 3-question survey (stars, where they heard of us,
- * comment) and an "install the app" card that re-books in two taps.
+ * The 3-question survey (stars, where they heard of us, comment) for one
+ * client link. Used on the delivered tracking page and, once the link has
+ * expired, on the client app home (/app/<token>?review=<link token>).
  *
- * `staff` (the dashboard's ?staff=1 preview) renders everything but writes
- * nothing, so dispatch checking the page doesn't create feedback or tokens.
+ * `staff` (the dashboard's ?staff=1 preview) renders it but writes nothing.
  */
-export default function AfterDelivery({ token, staff }: { token: string; staff: boolean }) {
+export function ReviewCard({ token, staff }: { token: string; staff: boolean }) {
   const org = useOrgForToken(token);
   const reviewUrl = org?.branding.google_review_url?.trim() || '';
+  const brand = orgBrand();
 
-  // ---- survey ----
   const doneKey = `nokael_feedback_${token}`;
   const [rating, setRating] = useState(0);
   const [source, setSource] = useState<LeadSource | null>(null);
@@ -67,12 +66,121 @@ export default function AfterDelivery({ token, staff }: { token: string; staff: 
     window.open(reviewUrl, '_blank', 'noopener,noreferrer');
   };
 
-  // ---- install ----
+  return (
+    <section className="nokael-card space-y-4">
+      {sent ? (
+        <div className="space-y-3 text-center py-1">
+          <CheckCircle2 className="w-8 h-8 text-nokael-success mx-auto" />
+          <p className="font-semibold text-nokael-primary">Thank you for the feedback!</p>
+          {sent >= 4 && reviewUrl ? (
+            <>
+              <p className="text-[13px] text-nokael-text-muted">
+                Glad it went well. A quick Google review helps other people find {brand}.
+              </p>
+              <button onClick={openReview} className="nokael-button gap-2">
+                <Star className="w-5 h-5 fill-current" /> Leave a Google review
+              </button>
+            </>
+          ) : sent <= 3 ? (
+            <>
+              <p className="text-[13px] text-nokael-text-muted">
+                Sorry it wasn't perfect. Tell dispatch what happened and we'll put it right.
+              </p>
+              <a
+                href={`https://wa.me/${orgDispatchNumber()}?text=${encodeURIComponent(`Hi ${brand}, I'd like to give some feedback on my delivery.`)}`}
+                target="_blank" rel="noopener noreferrer"
+                className="nokael-button gap-2 no-underline"
+              >
+                <MessageSquare className="w-5 h-5" /> Message dispatch
+              </a>
+            </>
+          ) : null}
+        </div>
+      ) : (
+        <>
+          <div>
+            <p className="font-semibold text-nokael-primary">How did we do?</p>
+            <p className="text-[13px] text-nokael-text-muted">Three quick taps. It really helps.</p>
+          </div>
+
+          <div className="flex justify-center gap-2" role="radiogroup" aria-label="Rating">
+            {[1, 2, 3, 4, 5].map((n) => (
+              <button
+                key={n}
+                role="radio"
+                aria-checked={rating === n}
+                aria-label={`${n} star${n > 1 ? 's' : ''}`}
+                onClick={() => setRating(n)}
+                className="p-1.5 active:scale-90 transition-transform"
+              >
+                <Star className={`w-9 h-9 ${n <= rating ? 'text-amber-400 fill-amber-400' : 'text-slate-300'}`} />
+              </button>
+            ))}
+          </div>
+
+          {rating > 0 && (
+            <>
+              <div className="space-y-2">
+                <p className="info-label">Where did you hear about {brand}?</p>
+                <div className="flex flex-wrap gap-2">
+                  {LEAD_SOURCES.map((s) => (
+                    <button
+                      key={s.value}
+                      onClick={() => setSource(source === s.value ? null : s.value)}
+                      className={`px-3 py-1.5 rounded-full border text-[13px] font-medium transition-colors ${
+                        source === s.value
+                          ? 'bg-nokael-primary border-nokael-primary text-white'
+                          : 'bg-white border-nokael-border text-nokael-primary hover:bg-slate-50'
+                      }`}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+                {source === 'other' && (
+                  <input
+                    value={other}
+                    onChange={(e) => setOther(e.target.value)}
+                    maxLength={120}
+                    placeholder="Where?"
+                    className="w-full rounded-xl border border-nokael-border px-3 py-2.5 text-sm"
+                  />
+                )}
+              </div>
+
+              <textarea
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                maxLength={2000}
+                rows={2}
+                placeholder={rating >= 4 ? 'Anything you loved? (optional)' : 'What could we do better? (optional)'}
+                className="w-full rounded-xl border border-nokael-border px-3 py-2.5 text-sm resize-none"
+              />
+
+              {error && <p className="text-[13px] text-red-600">{error}</p>}
+              <button onClick={send} disabled={sending} className="nokael-button gap-2 disabled:opacity-60">
+                {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : null} Send feedback
+              </button>
+            </>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+/**
+ * Shown on the tracking page once a job is completed (first 24h), for sender
+ * and recipient alike: the survey, "Book another delivery" (opens the client
+ * app straight away — no install needed), and an optional install card.
+ */
+export default function AfterDelivery({ token, staff }: { token: string; staff: boolean }) {
   const [appToken, setAppToken] = useState<string | null>(null);
   const [canPrompt, setCanPrompt] = useState(hasInstallPrompt);
   const [installed, setInstalled] = useState(false);
   const dismissKey = 'nokael_app_install_dismissed';
   const [dismissed, setDismissed] = useState(() => !!store.get(dismissKey));
+  const brand = orgBrand();
 
   useEffect(() => {
     if (staff) return;
@@ -97,126 +205,42 @@ export default function AfterDelivery({ token, staff }: { token: string; staff: 
     if (appToken) window.location.href = `${appUrl(appToken)}?install=1`;
   };
 
-  const showInstall = !isStandalone() && !dismissed && (staff || !!appToken);
-  const brand = orgBrand();
-
-  // Only client links get an app token; a driver opening /track sees neither card.
+  // Only client links get an app token; a driver opening /track sees nothing.
   if (!staff && !appToken) return null;
+
+  const showInstall = !isStandalone() && !dismissed;
 
   return (
     <>
-      <section className="nokael-card space-y-4">
-        {sent ? (
-          <div className="space-y-3 text-center py-1">
-            <CheckCircle2 className="w-8 h-8 text-nokael-success mx-auto" />
-            <p className="font-semibold text-nokael-primary">Thank you for the feedback!</p>
-            {sent >= 4 && reviewUrl ? (
-              <>
-                <p className="text-[13px] text-nokael-text-muted">
-                  Glad it went well. A quick Google review helps other people find {brand}.
-                </p>
-                <button onClick={openReview} className="nokael-button gap-2">
-                  <Star className="w-5 h-5 fill-current" /> Leave a Google review
-                </button>
-              </>
-            ) : sent <= 3 ? (
-              <>
-                <p className="text-[13px] text-nokael-text-muted">
-                  Sorry it wasn't perfect. Tell dispatch what happened and we'll put it right.
-                </p>
-                <a
-                  href={`https://wa.me/${orgDispatchNumber()}?text=${encodeURIComponent(`Hi ${brand}, I'd like to give some feedback on my delivery.`)}`}
-                  target="_blank" rel="noopener noreferrer"
-                  className="nokael-button gap-2 no-underline"
-                >
-                  <MessageSquare className="w-5 h-5" /> Message dispatch
-                </a>
-              </>
-            ) : null}
-          </div>
-        ) : (
-          <>
-            <div>
-              <p className="font-semibold text-nokael-primary">How did we do?</p>
-              <p className="text-[13px] text-nokael-text-muted">Three quick taps. It really helps.</p>
-            </div>
+      <ReviewCard token={token} staff={staff} />
 
-            <div className="flex justify-center gap-2" role="radiogroup" aria-label="Rating">
-              {[1, 2, 3, 4, 5].map((n) => (
-                <button
-                  key={n}
-                  role="radio"
-                  aria-checked={rating === n}
-                  aria-label={`${n} star${n > 1 ? 's' : ''}`}
-                  onClick={() => setRating(n)}
-                  className="p-1.5 active:scale-90 transition-transform"
-                >
-                  <Star className={`w-9 h-9 ${n <= rating ? 'text-amber-400 fill-amber-400' : 'text-slate-300'}`} />
-                </button>
-              ))}
-            </div>
-
-            {rating > 0 && (
-              <>
-                <div className="space-y-2">
-                  <p className="info-label">Where did you hear about {brand}?</p>
-                  <div className="flex flex-wrap gap-2">
-                    {LEAD_SOURCES.map((s) => (
-                      <button
-                        key={s.value}
-                        onClick={() => setSource(source === s.value ? null : s.value)}
-                        className={`px-3 py-1.5 rounded-full border text-[13px] font-medium transition-colors ${
-                          source === s.value
-                            ? 'bg-nokael-primary border-nokael-primary text-white'
-                            : 'bg-white border-nokael-border text-nokael-primary hover:bg-slate-50'
-                        }`}
-                      >
-                        {s.label}
-                      </button>
-                    ))}
-                  </div>
-                  {source === 'other' && (
-                    <input
-                      value={other}
-                      onChange={(e) => setOther(e.target.value)}
-                      maxLength={120}
-                      placeholder="Where?"
-                      className="w-full rounded-xl border border-nokael-border px-3 py-2.5 text-sm"
-                    />
-                  )}
-                </div>
-
-                <textarea
-                  value={comment}
-                  onChange={(e) => setComment(e.target.value)}
-                  maxLength={2000}
-                  rows={2}
-                  placeholder={rating >= 4 ? 'Anything you loved? (optional)' : 'What could we do better? (optional)'}
-                  className="w-full rounded-xl border border-nokael-border px-3 py-2.5 text-sm resize-none"
-                />
-
-                {error && <p className="text-[13px] text-red-600">{error}</p>}
-                <button onClick={send} disabled={sending} className="nokael-button gap-2 disabled:opacity-60">
-                  {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : null} Send feedback
-                </button>
-              </>
-            )}
-          </>
-        )}
-      </section>
+      <a
+        href={appToken ? appUrl(appToken) : undefined}
+        aria-disabled={!appToken}
+        className={`w-full flex items-center justify-between rounded-2xl bg-nokael-primary text-white px-5 py-5 shadow-lg shadow-nokael-primary/15 no-underline active:scale-[0.99] ${appToken ? '' : 'opacity-60 pointer-events-none'}`}
+      >
+        <span className="flex items-center gap-3">
+          <span className="w-11 h-11 rounded-xl bg-white/10 flex items-center justify-center"><Plus className="w-6 h-6" /></span>
+          <span className="text-left">
+            <span className="block text-lg font-bold">Book another delivery</span>
+            <span className="block text-[13px] text-white/60">Same route or a new one, priced on WhatsApp</span>
+          </span>
+        </span>
+        <ArrowRight className="w-5 h-5" />
+      </a>
 
       {showInstall && (
-        <section className="rounded-2xl p-6 shadow-sm space-y-4 bg-nokael-primary text-white">
+        <section className="nokael-card space-y-4">
           <div className="flex items-start gap-3">
-            <span className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
-              <Smartphone className="w-5 h-5" />
+            <span className="w-10 h-10 rounded-xl bg-nokael-accent-light flex items-center justify-center shrink-0">
+              <Smartphone className="w-5 h-5 text-nokael-accent" />
             </span>
             <div>
-              <p className="font-semibold">{installed ? `${brand} is on your home screen` : `Book your next delivery in two taps`}</p>
-              <p className="text-[13px] text-white/70">
+              <p className="font-semibold text-nokael-primary">{installed ? `${brand} is on your home screen` : `Add ${brand} to your home screen`}</p>
+              <p className="text-[13px] text-nokael-text-muted">
                 {installed
                   ? 'Open it any time to repeat this delivery or send something new.'
-                  : `Add ${brand} to your home screen. Your addresses are saved, so re-booking takes seconds.`}
+                  : 'Your addresses are saved, so next time re-booking takes seconds.'}
               </p>
             </div>
           </div>
@@ -224,14 +248,15 @@ export default function AfterDelivery({ token, staff }: { token: string; staff: 
             <div className="flex gap-2">
               <button
                 onClick={install}
-                className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-white text-nokael-primary font-semibold px-4 py-3 active:scale-[0.98]"
+                disabled={staff}
+                className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-nokael-border bg-white text-nokael-primary font-semibold px-4 py-3 active:scale-[0.98] disabled:opacity-60"
               >
                 {isIOS() ? <Share className="w-4 h-4" /> : <Download className="w-4 h-4" />}
-                {canPrompt ? 'Install app' : 'Get the app'}
+                {canPrompt ? 'Install app' : 'Add to home screen'}
               </button>
               <button
                 onClick={() => { store.set(dismissKey, '1'); setDismissed(true); }}
-                className="px-4 py-3 rounded-xl text-white/70 text-sm font-medium hover:bg-white/10"
+                className="px-4 py-3 rounded-xl text-nokael-text-muted text-sm font-medium hover:bg-slate-50"
               >
                 Not now
               </button>

@@ -1,7 +1,7 @@
 {
-  "versionCode": 4,
-  "versionName": "1.0.3",
+  "versionCode": 5,
+  "versionName": "1.0.4",
   "minVersionCode": 4,
   "apkUrl": "https://coc.nokael.com/android/nokael-driver.apk",
-  "notes": "The app now opens offline unless you're in the middle of a shift. Tap GO ONLINE when you're ready to take jobs."
+  "notes": "Jobs now show their pickup and drop-off time windows, and your job list is ordered by pickup window."
 }

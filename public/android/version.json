@@ -1,7 +1,7 @@
 {
-  "versionCode": 5,
-  "versionName": "1.0.4",
+  "versionCode": 6,
+  "versionName": "1.0.5",
   "minVersionCode": 4,
   "apkUrl": "https://coc.nokael.com/android/nokael-driver.apk",
-  "notes": "Jobs now show their pickup and drop-off time windows, and your job list is ordered by pickup window."
+  "notes": "The app now asks to send notifications when you sign in, and shows a banner if they're off, so you don't miss new jobs. Also shows pickup and drop-off time windows."
 }

@@ -2,7 +2,7 @@ import { useState, useEffect, Suspense, lazy } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useLinkSeen } from '@/src/lib/linkSeen';
 import { supabase, isSupabaseConfigured } from '@/src/lib/supabase';
-import { formatUAETime, isWhatsAppBrowser } from '@/src/lib/utils';
+import { formatUAETime, formatWindow, isWhatsAppBrowser } from '@/src/lib/utils';
 import { Job, Step, STEP_CONFIG, VALID_STEPS } from '@/src/types';
 import { isLinkExpired, redirectToBooking } from '@/src/lib/constants';
 import { useOrgForToken, orgBrand, orgDispatchNumber } from '@/src/lib/org';
@@ -92,6 +92,17 @@ interface ViewProps {
   myOtp: string;
 }
 
+/** "Pickup window 3:00–5:00 pm" chip; nothing when the job has no window. */
+function WindowChip({ label, start, end }: { label: string; start?: string | null; end?: string | null }) {
+  const value = formatWindow(start, end);
+  if (!value) return null;
+  return (
+    <p className="inline-flex items-center gap-2 rounded-xl bg-amber-50 px-3 py-1.5 text-sm font-bold text-amber-800">
+      <Clock className="w-4 h-4" /> {label} {value}
+    </p>
+  );
+}
+
 function SenderView({ job, step, config, online, handleReadyUpdate, handleRevealOtp, showMyOtp, partnerOtp, setPartnerOtp, handleConfirm, error, myOtp, confirming }: ViewProps) {
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
@@ -100,6 +111,7 @@ function SenderView({ job, step, config, online, handleReadyUpdate, handleReveal
         <p className="text-nokael-text-muted text-sm font-medium px-4">
           Ask the courier for their 4-digit code and enter it below, or tap to reveal your verification code to read aloud to them.
         </p>
+        <WindowChip label="Pickup window" start={job.pickup_window_start} end={job.pickup_window_end} />
       </div>
 
       <div className="nokael-card !p-8 border-nokael-accent/20 bg-nokael-accent/[0.02] shadow-2xl relative overflow-hidden group">
@@ -233,6 +245,11 @@ function CourierView({ job, step, online, handleReadyUpdate, partnerOtp, setPart
             <p className="text-sm font-bold text-nokael-text-muted uppercase mt-1 tracking-wider">
                {isPickup ? job.pickup_emirate : job.delivery_emirate}, UAE
             </p>
+            <div className="mt-3">
+              {isPickup
+                ? <WindowChip label="Pickup window" start={job.pickup_window_start} end={job.pickup_window_end} />
+                : <WindowChip label="Delivery window" start={job.delivery_window_start} end={job.delivery_window_end} />}
+            </div>
           </div>
           <button 
             onClick={handleNavigationLaunch}
@@ -379,6 +396,7 @@ function RecipientView({ job, step, config, online, handleReadyUpdate, handleRev
 
   return (
     <div className="space-y-6 h-full animate-in fade-in duration-700 flex flex-col">
+       <WindowChip label="Delivery window" start={job.delivery_window_start} end={job.delivery_window_end} />
        <div className="flex-1 min-h-[500px] relative rounded-[32px] overflow-hidden border border-nokael-border shadow-2xl group">
           <div className="absolute top-6 left-6 z-10 space-y-3">
              <div className="bg-white/95 backdrop-blur px-5 py-3 rounded-2xl border border-nokael-border shadow-xl flex items-center gap-4 animate-in slide-in-from-left duration-500">

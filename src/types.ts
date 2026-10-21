@@ -40,6 +40,11 @@ export interface Job {
   company_name?: string | null;
   cancellation_reason?: string | null;
   scheduled_pickup_at?: string | null;
+  // Windows set on the job form (get_job_by_token; delivery = scheduled_delivery_start/end).
+  pickup_window_start?: string | null;
+  pickup_window_end?: string | null;
+  delivery_window_start?: string | null;
+  delivery_window_end?: string | null;
   driver_arrived_pickup_at?: string | null;
   sender_ready_at?: string | null;
   driver_arrived_delivery_at?: string | null;

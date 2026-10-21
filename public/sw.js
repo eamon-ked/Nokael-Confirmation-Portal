@@ -7,8 +7,8 @@
 // handler below serves JS/CSS cache-first, so devices that already installed
 // an old service worker will keep running a stale (possibly broken/
 // misconfigured) bundle indefinitely unless the cache name changes.
-const CACHE_NAME = 'nokael-v2';
-const RUNTIME_CACHE = 'nokael-runtime-v2';
+const CACHE_NAME = 'nokael-v3';
+const RUNTIME_CACHE = 'nokael-runtime-v3';
 
 // Assets to cache on install
 const PRECACHE_ASSETS = [

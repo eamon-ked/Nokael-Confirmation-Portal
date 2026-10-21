@@ -2,7 +2,7 @@
   "id": "/",
   "name": "Nokael",
   "short_name": "Nokael",
-  "description": "Nokael chain-of-custody driver app — jobs, status, and confirmations.",
+  "description": "Nokael chain-of-custody deliveries — tracking, confirmations and booking.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

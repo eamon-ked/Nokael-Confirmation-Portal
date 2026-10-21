@@ -31,6 +31,7 @@ import { useOrgForToken, orgBrand, orgDispatchNumber, orgTimeZone } from '@/src/
 import { downloadCocPdf, DriverContact, PodFix } from '@/src/lib/cocPdf';
 import DriverMap from './DriverMap';
 import CustodyTimeline from './CustodyTimeline';
+import AfterDelivery from './AfterDelivery';
 import { enableTrackingPush, trackingPushState, type TrackingPushState } from '@/src/lib/push';
 import { useLinkSeen } from '@/src/lib/linkSeen';
 
@@ -366,6 +367,9 @@ export default function TrackPage() {
             </div>
           </div>
         </section>
+
+        {/* Survey + install-the-app (marketing, both parties) */}
+        {job.status === 'completed' && token && <AfterDelivery token={token} staff={search.get('staff') === '1'} />}
 
         {/* COC download — the end-of-job deliverable */}
         {job.status === 'completed' && (

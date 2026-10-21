@@ -15,7 +15,7 @@ export interface OrgProfile {
   id: string;
   name: string;
   slug: string;
-  branding: { display_name?: string; whatsapp?: string; support_phone?: string; logo_url?: string; primary_color?: string };
+  branding: { display_name?: string; whatsapp?: string; support_phone?: string; logo_url?: string; primary_color?: string; google_review_url?: string };
   settings: { timezone?: string; currency?: string; locale?: string; country?: string; coc?: unknown };
 }
 

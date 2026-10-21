@@ -41,6 +41,35 @@ async function startServer() {
   const app = express();
   const PORT = process.env.PORT || 3000;
 
+  // Client app manifest: one installable app per client app token, so the
+  // home-screen icon opens /app/<token> (the re-booking app) rather than a
+  // tracking link that closes 24h after delivery. A blob: manifest isn't
+  // reliably installable in Chrome, hence a real URL. Registered before Vite
+  // and the SPA catch-all so it works in dev and production.
+  app.get('/app/:appToken/manifest.webmanifest', (req, res) => {
+    const t = req.params.appToken;
+    if (!/^[0-9a-f-]{36}$/i.test(t)) return res.sendStatus(404);
+    res.set('Content-Type', 'application/manifest+json');
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.send(JSON.stringify({
+      id: `/app/${t}`,
+      name: 'Nokael — book a delivery',
+      short_name: 'Nokael',
+      description: 'Book and track Nokael deliveries.',
+      start_url: `/app/${t}`,
+      scope: '/',
+      display: 'standalone',
+      orientation: 'portrait',
+      background_color: '#f2f4f7',
+      theme_color: '#0f172a',
+      icons: [
+        { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+        { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+        { src: '/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+      ],
+    }));
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({

@@ -3,6 +3,7 @@ import ConfirmationPage from './components/ConfirmationPage';
 import DriverHub from './components/DriverHub';
 import DriverStatusPage from './components/DriverStatusPage';
 import TrackPage from './components/TrackPage';
+import ClientAppPage from './components/ClientAppPage';
 
 export default function App() {
   return (
@@ -17,6 +18,9 @@ export default function App() {
 
           {/* Driver Status — persistent per-driver link to toggle availability */}
           <Route path="/driver/:driverId/status" element={<DriverStatusPage />} />
+
+          {/* Client app — installable re-booking PWA (long-lived client_app_tokens) */}
+          <Route path="/app/:appToken" element={<ClientAppPage />} />
 
           {/* Main Confirmation Route */}
           <Route path="/:token/:step" element={<ConfirmationPage />} />

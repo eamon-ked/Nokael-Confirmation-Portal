@@ -1137,7 +1137,9 @@ export default function ConfirmationPage() {
           clearTimeout(timeoutId);
 
           if (supabaseError) {
-            if (isLinkExpired(supabaseError)) { await removeCachedJob(token!).catch(() => {}); redirectToBooking(); return; }
+            // Expired: the tracking page shows client links a survey + install
+            // card, and sends driver links on to booking.
+            if (isLinkExpired(supabaseError)) { await removeCachedJob(token!).catch(() => {}); window.location.replace(`/${token}/track`); return; }
             if (supabaseError.code === 'PGRST116') { setError('Security Error: Invalid or expired access link. Please check the link or contact dispatch.'); setLoading(false); return; }
             if (supabaseError.message?.includes('failed to fetch') || supabaseError.message?.includes('NetworkError')) throw new Error('NETWORK_ERROR');
             throw supabaseError;

@@ -26,8 +26,9 @@ import {
 import { supabase, isSupabaseConfigured } from '@/src/lib/supabase';
 import { formatUAETime } from '@/src/lib/utils';
 import { Job } from '@/src/types';
-import { LINK_EXPIRY_HOURS, isLinkExpired, redirectToBooking } from '@/src/lib/constants';
-import { useOrgForToken, orgBrand, orgDispatchNumber, orgTimeZone } from '@/src/lib/org';
+import { BOOK_URL, LINK_EXPIRY_HOURS, isLinkExpired, redirectToBooking } from '@/src/lib/constants';
+import { useOrgForToken, orgBrand, orgDispatchNumber, orgLogoUrl, orgTimeZone } from '@/src/lib/org';
+import { issueAppToken } from '@/src/lib/clientApp';
 import { downloadCocPdf, DriverContact, PodFix } from '@/src/lib/cocPdf';
 import DriverMap from './DriverMap';
 import CustodyTimeline from './CustodyTimeline';
@@ -131,6 +132,7 @@ export default function TrackPage() {
   useLinkSeen(token);
   const [search] = useSearchParams();
   const party: Party = search.get('for') === 'recipient' ? 'recipient' : 'sender';
+  const staffView = search.get('staff') === '1';
 
   const [job, setJob] = useState<Job | null>(null);
   const [driver, setDriver] = useState<DriverContact | null>(null);
@@ -138,6 +140,7 @@ export default function TrackPage() {
   const [pushState, setPushState] = useState<TrackingPushState>(() => (token ? trackingPushState(token) : 'unsupported'));
   const [pushBusy, setPushBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [expired, setExpired] = useState(false);
   const [showOtp, setShowOtp] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [, setTick] = useState(0);
@@ -146,7 +149,14 @@ export default function TrackPage() {
   const fetchJob = useCallback(async () => {
     if (!token) return;
     const { data, error: err } = await supabase.rpc('get_job_by_token', { p_token: token }).maybeSingle();
-    if (isLinkExpired(err)) return redirectToBooking();
+    if (isLinkExpired(err)) {
+      // Expired = delivered over 24h ago. Job details stay hidden, but a client
+      // link still gets the survey + install card (client_app_issue ignores the
+      // expiry). Driver links have no app token, so they go to booking.
+      // (Dispatch's ?staff=1 preview only opens client links and must not write.)
+      if (staffView || await issueAppToken(token)) { setExpired(true); setLoading(false); return; }
+      return redirectToBooking();
+    }
     if (err) {
       setError(isSupabaseConfigured ? 'We could not load this job right now. Please refresh, or contact dispatch.' : 'This tracking page is not configured. Please contact Nokael dispatch.');
     } else if (!data) {
@@ -156,7 +166,7 @@ export default function TrackPage() {
       setError(null);
     }
     setLoading(false);
-  }, [token]);
+  }, [token, staffView]);
 
   // Driver contact card. Missing RPC (migration not applied) or no driver
   // yet both just leave the card empty; the page falls back to dispatch.
@@ -240,6 +250,33 @@ export default function TrackPage() {
       <div className="min-h-[100dvh] flex flex-col items-center justify-center gap-3 text-nokael-text-muted">
         <Loader2 className="w-6 h-6 animate-spin text-nokael-primary" />
         <p className="text-sm">Loading your delivery…</p>
+      </div>
+    );
+  }
+
+  if (expired && token) {
+    return (
+      <div className="min-h-[100dvh] pb-[max(2rem,env(safe-area-inset-bottom))]">
+        <header className="sticky top-0 z-[1100] bg-nokael-bg/90 backdrop-blur border-b border-nokael-border">
+          <div className="max-w-2xl mx-auto px-4 h-14 flex items-center gap-2">
+            <img src={orgLogoUrl() || '/nokael-logo.jpg'} alt="" className="w-7 h-7 rounded-lg object-cover" />
+            <span className="font-extrabold tracking-tight text-nokael-primary">{orgBrand().toUpperCase()}</span>
+          </div>
+        </header>
+        <main className="max-w-2xl mx-auto px-4 pt-5 space-y-4">
+          <section className="nokael-card space-y-2">
+            <CheckCircle2 className="w-8 h-8 text-nokael-success" />
+            <h1 className="text-2xl font-bold text-nokael-primary leading-tight">Your delivery is complete</h1>
+            <p className="text-sm text-nokael-text-muted">
+              Delivery details close {LINK_EXPIRY_HOURS} hours after handover to keep them private. Need the custody certificate? Dispatch can send it to you.
+            </p>
+          </section>
+          <AfterDelivery token={token} staff={staffView} />
+          <section className="grid grid-cols-2 gap-2.5">
+            <ActionButton primary href={`${BOOK_URL}?expired=1`} icon={Package} label="Book a delivery" />
+            <ActionButton href={wa(orgDispatchNumber(), `Hi ${orgBrand()}, could you send me the custody certificate for my delivery?`)} icon={MessageSquare} label="Message dispatch" sub="WhatsApp" />
+          </section>
+        </main>
       </div>
     );
   }
@@ -369,7 +406,7 @@ export default function TrackPage() {
         </section>
 
         {/* Survey + install-the-app (marketing, both parties) */}
-        {job.status === 'completed' && token && <AfterDelivery token={token} staff={search.get('staff') === '1'} />}
+        {job.status === 'completed' && token && <AfterDelivery token={token} staff={staffView} />}
 
         {/* COC download — the end-of-job deliverable */}
         {job.status === 'completed' && (

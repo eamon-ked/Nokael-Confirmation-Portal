@@ -100,6 +100,9 @@ export default function AfterDelivery({ token, staff }: { token: string; staff: 
   const showInstall = !isStandalone() && !dismissed && (staff || !!appToken);
   const brand = orgBrand();
 
+  // Only client links get an app token; a driver opening /track sees neither card.
+  if (!staff && !appToken) return null;
+
   return (
     <>
       <section className="nokael-card space-y-4">
@@ -203,7 +206,7 @@ export default function AfterDelivery({ token, staff }: { token: string; staff: 
       </section>
 
       {showInstall && (
-        <section className="nokael-card space-y-4 bg-nokael-primary text-white border-nokael-primary">
+        <section className="rounded-2xl p-6 shadow-sm space-y-4 bg-nokael-primary text-white">
           <div className="flex items-start gap-3">
             <span className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
               <Smartphone className="w-5 h-5" />

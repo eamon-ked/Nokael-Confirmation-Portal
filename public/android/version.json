@@ -1,7 +1,7 @@
 {
-  "versionCode": 6,
-  "versionName": "1.0.5",
+  "versionCode": 7,
+  "versionName": "1.0.6",
   "minVersionCode": 4,
   "apkUrl": "https://coc.nokael.com/android/nokael-driver.apk",
-  "notes": "The app now asks to send notifications when you sign in, and shows a banner if they're off, so you don't miss new jobs. Also shows pickup and drop-off time windows."
+  "notes": "Jobs now show when they start, and the app warns you if you tap I HAVE ARRIVED before the pickup time."
 }

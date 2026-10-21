@@ -24,7 +24,7 @@ import {
   UserCheck,
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '@/src/lib/supabase';
-import { formatUAETime } from '@/src/lib/utils';
+import { formatUAETime, formatWindow, windowFit } from '@/src/lib/utils';
 import { Job } from '@/src/types';
 import { BOOK_URL, LINK_EXPIRY_HOURS, isLinkExpired, redirectToBooking } from '@/src/lib/constants';
 import { useOrgForToken, orgBrand, orgDispatchNumber, orgLogoUrl, orgTimeZone } from '@/src/lib/org';
@@ -90,14 +90,29 @@ function headline(job: Job, stage: number, party: Party): { title: string; sub: 
       return job.driver_arrived_pickup_at
         ? { title: 'Driver at pickup', sub: `Arrived at ${job.pickup_location}. ${party === 'sender' ? 'Hand over the package with your code.' : 'Collection in progress.'}` }
         : { title: 'Driver on the way to pickup', sub: `Heading to ${job.pickup_location}, ${job.pickup_emirate}.` };
-    default:
+    default: {
+      const pickupWindow = formatWindow(job.pickup_window_start, job.pickup_window_end);
       return {
         title: 'Booking confirmed',
-        sub: job.scheduled_pickup_at
-          ? `Pickup scheduled for ${formatUAETime(job.scheduled_pickup_at)}. A driver will be assigned shortly.`
-          : 'We are assigning a driver to your job.',
+        // The sender's pickup window is listed under the headline.
+        sub: pickupWindow && party === 'sender'
+          ? 'A driver will be assigned before your pickup window.'
+          : job.scheduled_pickup_at
+            ? `Pickup scheduled for ${formatUAETime(job.scheduled_pickup_at)}. A driver will be assigned shortly.`
+            : 'We are assigning a driver to your job.',
       };
+    }
   }
+}
+
+/** The windows this party cares about: the sender both, the recipient only delivery. */
+function windowLines(job: Job, party: Party): { label: string; value: string }[] {
+  const lines = [];
+  const pickup = formatWindow(job.pickup_window_start, job.pickup_window_end);
+  const delivery = formatWindow(job.delivery_window_start, job.delivery_window_end);
+  if (party === 'sender' && pickup) lines.push({ label: 'Pickup window', value: pickup });
+  if (delivery) lines.push({ label: 'Delivery window', value: delivery });
+  return lines;
 }
 
 function ActionButton({ href, icon: Icon, label, sub, primary, disabled }: {
@@ -302,6 +317,13 @@ export default function TrackPage() {
   const otpUsedAt = party === 'sender' ? (job.driver_pickup_at || job.client_pickup_at) : (job.client_delivery_at || job.driver_delivery_at);
   const showOtpCard = !!otp && isActive && !otpUsedAt;
 
+  // The ETA is to the next stop: pickup before collection, drop-off after.
+  const etaAt = etaMinutes != null ? new Date(Date.now() + etaMinutes * 60000) : null;
+  const etaFit = etaAt && (stage >= 2
+    ? windowFit(etaAt, job.delivery_window_start, job.delivery_window_end)
+    : windowFit(etaAt, job.pickup_window_start, job.pickup_window_end));
+  const windows = isActive || stage === 0 ? windowLines(job, party) : [];
+
   const hasDriverPos = job.driver_lat != null && job.driver_lng != null;
   const locationStale = job.driver_updated_at ? Date.now() - new Date(job.driver_updated_at).getTime() > STALE_LOCATION_MS : true;
   const vehicle = driver ? [driver.vehicle_make, driver.vehicle_model].filter(Boolean).join(' ') || driver.vehicle_type : null;
@@ -341,9 +363,24 @@ export default function TrackPage() {
                 <p className="mt-3 inline-flex items-center gap-2 rounded-xl bg-nokael-accent-light px-3 py-2 text-sm font-semibold text-nokael-primary">
                   <Clock className="w-4 h-4 text-nokael-accent" />
                   {stage >= 2 ? 'Arriving' : 'Driver at pickup'} around{' '}
-                  {new Date(Date.now() + etaMinutes * 60000).toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: orgTimeZone() })}
+                  {etaAt!.toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: orgTimeZone() })}
                   <span className="font-normal text-nokael-text-muted">· about {etaMinutes} min</span>
+                  {etaFit && (
+                    <span className={etaFit.late ? 'font-semibold text-amber-600' : 'font-semibold text-nokael-success'}>
+                      · {etaFit.late ? `about ${etaFit.minutes} min late` : 'on time'}
+                    </span>
+                  )}
                 </p>
+              )}
+              {windows.length > 0 && !closed && (
+                <dl className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm">
+                  {windows.map(w => (
+                    <div key={w.label} className="flex gap-1.5">
+                      <dt className="text-nokael-text-muted">{w.label}</dt>
+                      <dd className="font-semibold text-nokael-primary">{w.value}</dd>
+                    </div>
+                  ))}
+                </dl>
               )}
             </div>
             {isActive && (

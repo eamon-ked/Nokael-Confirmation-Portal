@@ -24,7 +24,7 @@ import {
   UserCheck,
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '@/src/lib/supabase';
-import { formatUAETime, formatWindow, windowFit } from '@/src/lib/utils';
+import { formatClock, formatUAETime, formatWindow, windowFit } from '@/src/lib/utils';
 import { Job } from '@/src/types';
 import { BOOK_URL, LINK_EXPIRY_HOURS, isLinkExpired, redirectToBooking } from '@/src/lib/constants';
 import { useOrgForToken, orgBrand, orgDispatchNumber, orgLogoUrl, orgTimeZone } from '@/src/lib/org';
@@ -78,6 +78,16 @@ function stageOf(job: Job): number {
   return 0;
 }
 
+/**
+ * Live tracking (map, ETA, driver's phone) opens an hour before the pickup
+ * starts, or as soon as the driver reaches the pickup. The server withholds
+ * the driver's position until then (get_job_by_token); this only words it.
+ */
+function trackingOpen(job: Job, stage: number): boolean {
+  if (!job.tracking_opens_at || stage >= 2 || job.driver_arrived_pickup_at) return true;
+  return Date.now() >= new Date(job.tracking_opens_at).getTime();
+}
+
 function headline(job: Job, stage: number, party: Party): { title: string; sub: string } {
   switch (stage) {
     case 4:
@@ -87,9 +97,16 @@ function headline(job: Job, stage: number, party: Party): { title: string; sub: 
     case 2:
       return { title: 'On the way', sub: `Collected ${formatUAETime(job.driver_pickup_at || job.client_pickup_at)}, heading to ${job.delivery_location}.` };
     case 1:
-      return job.driver_arrived_pickup_at
-        ? { title: 'Driver at pickup', sub: `Arrived at ${job.pickup_location}. ${party === 'sender' ? 'Hand over the package with your code.' : 'Collection in progress.'}` }
-        : { title: 'Driver on the way to pickup', sub: `Heading to ${job.pickup_location}, ${job.pickup_emirate}.` };
+      if (job.driver_arrived_pickup_at) {
+        return { title: 'Driver at pickup', sub: `Arrived at ${job.pickup_location}. ${party === 'sender' ? 'Hand over the package with your code.' : 'Collection in progress.'}` };
+      }
+      if (!trackingOpen(job, stage)) {
+        return {
+          title: 'Driver assigned',
+          sub: `Live tracking starts ${formatClock(job.tracking_opens_at!)}, an hour before ${party === 'sender' ? 'your pickup window' : 'pickup'}.`,
+        };
+      }
+      return { title: 'Driver on the way to pickup', sub: `Heading to ${job.pickup_location}, ${job.pickup_emirate}.` };
     default: {
       const pickupWindow = formatWindow(job.pickup_window_start, job.pickup_window_end);
       return {
@@ -324,7 +341,8 @@ export default function TrackPage() {
     : windowFit(etaAt, job.pickup_window_start, job.pickup_window_end));
   const windows = isActive || stage === 0 ? windowLines(job, party) : [];
 
-  const hasDriverPos = job.driver_lat != null && job.driver_lng != null;
+  const live = trackingOpen(job, stage);
+  const hasDriverPos = live && job.driver_lat != null && job.driver_lng != null;
   const locationStale = job.driver_updated_at ? Date.now() - new Date(job.driver_updated_at).getTime() > STALE_LOCATION_MS : true;
   const vehicle = driver ? [driver.vehicle_make, driver.vehicle_model].filter(Boolean).join(' ') || driver.vehicle_type : null;
 
@@ -359,7 +377,7 @@ export default function TrackPage() {
                     : job.cancellation_reason || 'This job has been cancelled. Contact dispatch if this is unexpected.'
                   : sub}
               </p>
-              {isActive && etaMinutes != null && !locationStale && (
+              {isActive && live && etaMinutes != null && !locationStale && (
                 <p className="mt-3 inline-flex items-center gap-2 rounded-xl bg-nokael-accent-light px-3 py-2 text-sm font-semibold text-nokael-primary">
                   <Clock className="w-4 h-4 text-nokael-accent" />
                   {stage >= 2 ? 'Arriving' : 'Driver at pickup'} around{' '}
@@ -514,13 +532,13 @@ export default function TrackPage() {
             )}
 
             <div className="grid grid-cols-2 gap-2.5">
-              {isActive && driver?.phone && (
+              {isActive && live && driver?.phone && (
                 <>
                   <ActionButton primary href={tel(driver.phone)} icon={Phone} label="Call driver" sub={driver.full_name?.split(' ')[0] || undefined} />
                   <ActionButton href={wa(driver.phone, `Hi, this is about ${orgBrand()} job ${job.job_ref}.`)} icon={MessageSquare} label="Message driver" sub="WhatsApp" />
                 </>
               )}
-              <ActionButton primary={!(isActive && driver?.phone)} href={tel(orgDispatchNumber())} icon={Headphones} label="Call dispatch" sub="24/7" />
+              <ActionButton primary={!(isActive && live && driver?.phone)} href={tel(orgDispatchNumber())} icon={Headphones} label="Call dispatch" sub="24/7" />
               <ActionButton href={wa(orgDispatchNumber(), dispatchMsg)} icon={MessageSquare} label="Message dispatch" sub="WhatsApp" />
             </div>
           </section>
@@ -529,7 +547,11 @@ export default function TrackPage() {
         {/* Live location */}
         {isActive && job.driver_id && (
           <section className="space-y-2">
-            {hasDriverPos ? (
+            {!live ? (
+              <div className="nokael-card text-sm text-nokael-text-muted flex items-center gap-2">
+                <Navigation className="w-4 h-4" /> Live location appears from {formatClock(job.tracking_opens_at!)}.
+              </div>
+            ) : hasDriverPos ? (
               <DriverMap job={job} onEta={setEtaMinutes} />
             ) : (
               <div className="nokael-card text-sm text-nokael-text-muted flex items-center gap-2">

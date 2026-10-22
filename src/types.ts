@@ -45,6 +45,8 @@ export interface Job {
   pickup_window_end?: string | null;
   delivery_window_start?: string | null;
   delivery_window_end?: string | null;
+  // When the client's live tracking opens (pickup start - 60 min); null = no time set.
+  tracking_opens_at?: string | null;
   driver_arrived_pickup_at?: string | null;
   sender_ready_at?: string | null;
   driver_arrived_delivery_at?: string | null;

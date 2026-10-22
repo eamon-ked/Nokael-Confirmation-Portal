@@ -44,6 +44,15 @@ export function formatWindow(start?: string | null, end?: string | null): string
   return s ? `${prefix}from ${time(s)}` : `${prefix}by ${time(e!)}`;
 }
 
+/** "2:00 pm" today, else "Thu, 23 Oct, 2:00 pm", in the company time zone. */
+export function formatClock(date: string | Date): string {
+  const tz = orgTimeZone();
+  const d = new Date(date);
+  const day = (x: Date) => x.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: tz });
+  const time = d.toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: tz });
+  return day(d) === day(new Date()) ? time : `${day(d)}, ${time}`;
+}
+
 /**
  * Where an expected arrival falls against a window: on time, or minutes late
  * past the window end (or start, when there is no end). Null without a window.

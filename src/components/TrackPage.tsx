@@ -457,7 +457,7 @@ export default function TrackPage() {
         </section>
 
         {/* Survey + install-the-app (marketing, both parties) */}
-        {job.status === 'completed' && token && <AfterDelivery token={token} staff={staffView} />}
+        {job.status === 'completed' && token && <AfterDelivery token={token} staff={staffView} party={party} />}
 
         {/* COC download — the end-of-job deliverable */}
         {job.status === 'completed' && (

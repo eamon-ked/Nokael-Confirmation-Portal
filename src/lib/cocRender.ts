@@ -120,6 +120,35 @@ export interface CocContext {
   template: CocTemplate;
   /** Logo already loaded as a data URL (see loadLogo). */
   logo?: { dataUrl: string; width: number; height: number } | null;
+  /** "Send with us" line above the footer (see cocPromo); omitted when null. */
+  promo?: CocPromo | null;
+}
+
+export interface CocPromo {
+  text: string;
+  /** Where the line links to in the PDF. */
+  url: string | null;
+}
+
+/** +971 50 971 0446 for UAE mobiles, else +<digits>. */
+const displayPhone = (digits: string) =>
+  /^9715\d{8}$/.test(digits)
+    ? `+971 ${digits.slice(3, 5)} ${digits.slice(5, 8)} ${digits.slice(8)}`
+    : `+${digits}`;
+
+/**
+ * The promo line every certificate carries, so whoever receives one knows how
+ * to send something the same way. `site` is a bare domain ("nokael.com");
+ * `whatsapp` is the dispatch number's digits. null when neither is known.
+ */
+export function cocPromo(brand: string, site: string | null | undefined, whatsapp: string | null | undefined): CocPromo | null {
+  const wa = (whatsapp ?? '').replace(/\D/g, '');
+  const parts = [site || null, wa.length >= 7 ? `WhatsApp ${displayPhone(wa)}` : null].filter(Boolean);
+  if (!parts.length) return null;
+  return {
+    text: `Need something delivered with proof? Send with ${brand}  ·  ${parts.join('  ·  ')}`,
+    url: site ? `https://${site}` : `https://wa.me/${wa}`,
+  };
 }
 
 const metersBetween = (aLat: number, aLng: number, bLat: number, bLng: number) => {
@@ -369,6 +398,22 @@ export function renderCocPdf(job: CocJobData, driver: DriverContact | null, pod:
     ? tpl.footer_note.trim().split('\n').flatMap((l) => doc.splitTextToSize(l, W - 2 * M)).slice(0, 4)
     : [];
   note.forEach((line: string, i: number) => doc.text(line, W / 2, 280 - (note.length - 1 - i) * 4, { align: 'center' }));
+  if (ctx.promo) {
+    // Sits just above the note (or the reference line when there's no note), clickable.
+    const promoY = (note.length ? 280 - (note.length - 1) * 4 : 285) - 7;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(accent);
+    const line = doc.splitTextToSize(ctx.promo.text, W - 2 * M)[0] as string;
+    doc.text(line, W / 2, promoY, { align: 'center' });
+    if (ctx.promo.url) {
+      const w = doc.getTextWidth(line);
+      doc.link(W / 2 - w / 2, promoY - 3.5, w, 5, { url: ctx.promo.url });
+    }
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(muted);
+  }
   doc.text(`${brand} Chain of Custody · ${job.job_ref ?? ''} · ${ctx.issuedBy}`, W / 2, 285, { align: 'center' });
 
   return doc;

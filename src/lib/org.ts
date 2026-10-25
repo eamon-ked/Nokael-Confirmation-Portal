@@ -36,6 +36,9 @@ export const orgDispatchNumber = () => {
   return n || (current.slug === 'nokael' ? WHATSAPP_NUMBER : '');
 };
 
+/** True for Nokael's own jobs (and before the company has loaded). */
+export const orgIsNokael = () => !current || current.slug === 'nokael';
+
 export const setOrg = (org: OrgProfile | null) => { if (org) current = org; };
 
 export function loadOrgForToken(token: string): Promise<OrgProfile | null> {

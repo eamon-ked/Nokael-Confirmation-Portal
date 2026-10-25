@@ -1,7 +1,7 @@
 import { Job } from '@/src/types';
 import { formatUAETime } from '@/src/lib/utils';
-import { orgBrand, orgTimeZone, orgCocTemplate, orgLogoUrl } from './org';
-import { renderCocPdf, normalizeCocTemplate, loadLogo, cocFileName, type DriverContact, type PodFix } from './cocRender';
+import { orgBrand, orgTimeZone, orgCocTemplate, orgLogoUrl, orgIsNokael, orgDispatchNumber } from './org';
+import { renderCocPdf, normalizeCocTemplate, loadLogo, cocFileName, cocPromo, type DriverContact, type PodFix } from './cocRender';
 
 export type { DriverContact, PodFix } from './cocRender';
 
@@ -22,6 +22,7 @@ export async function downloadCocPdf(job: Job, driver: DriverContact | null, pod
     issuedBy: window.location.host,
     template,
     logo: template.show_logo ? await loadLogo(orgLogoUrl()) : null,
+    promo: cocPromo(brand, orgIsNokael() ? 'nokael.com' : null, orgDispatchNumber()),
   });
   doc.save(cocFileName(brand, job.job_ref));
 }

@@ -171,10 +171,12 @@ export function ReviewCard({ token, staff }: { token: string; staff: boolean }) 
 
 /**
  * Shown on the tracking page once a job is completed (first 24h), for sender
- * and recipient alike: the survey, "Book another delivery" (opens the client
- * app straight away — no install needed), and an optional install card.
+ * and recipient alike: the survey, a booking card (opens the client app
+ * straight away — no install needed), and an optional install card. The
+ * recipient has just seen the service work, so their card pitches sending
+ * with us rather than "another" delivery.
  */
-export default function AfterDelivery({ token, staff }: { token: string; staff: boolean }) {
+export default function AfterDelivery({ token, staff, party = 'sender' }: { token: string; staff: boolean; party?: 'sender' | 'recipient' }) {
   const [appToken, setAppToken] = useState<string | null>(null);
   const [canPrompt, setCanPrompt] = useState(hasInstallPrompt);
   const [installed, setInstalled] = useState(false);
@@ -222,8 +224,17 @@ export default function AfterDelivery({ token, staff }: { token: string; staff: 
         <span className="flex items-center gap-3">
           <span className="w-11 h-11 rounded-xl bg-white/10 flex items-center justify-center"><Plus className="w-6 h-6" /></span>
           <span className="text-left">
-            <span className="block text-lg font-bold">Book another delivery</span>
-            <span className="block text-[13px] text-white/60">Same route or a new one, priced on WhatsApp</span>
+            {party === 'recipient' ? (
+              <>
+                <span className="block text-lg font-bold">Send with {brand}</span>
+                <span className="block text-[13px] text-white/60">Need something delivered with proof? One driver, a code at every handover, and a certificate like yours.</span>
+              </>
+            ) : (
+              <>
+                <span className="block text-lg font-bold">Book another delivery</span>
+                <span className="block text-[13px] text-white/60">Same route or a new one, priced on WhatsApp</span>
+              </>
+            )}
           </span>
         </span>
         <ArrowRight className="w-5 h-5" />

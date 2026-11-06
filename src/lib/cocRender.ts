@@ -87,6 +87,26 @@ export interface CocJobData {
   driver_arrived_delivery_at?: string | null;
   driver_delivery_at?: string | null;
   client_delivery_at?: string | null;
+  /** Multi-stop / round trip: every stop in order. One-way jobs leave it out. */
+  job_kind?: string | null;
+  stops?: CocStop[] | null;
+}
+
+/** A stop of a multi-stop or round-trip job, as the certificate prints it. */
+export interface CocStop {
+  id?: string;
+  seq: number;
+  kind: 'pickup' | 'drop';
+  address: string;
+  emirate?: string | null;
+  contact_name?: string | null;
+  company?: string | null;
+  item_note?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+  arrived_at?: string | null;
+  handed_at?: string | null;
+  method?: 'otp' | 'ops_override' | null;
 }
 
 export interface DriverContact {
@@ -100,8 +120,10 @@ export interface DriverContact {
 
 /** One confirmed custody step with the driver's GPS fix. */
 export interface PodFix {
-  step: 'client_pickup' | 'driver_pickup' | 'driver_delivery' | 'client_delivery';
+  step: 'client_pickup' | 'driver_pickup' | 'driver_delivery' | 'client_delivery' | 'stop_handover';
   method: 'otp' | 'ops_override';
+  /** stop_handover rows: which stop. */
+  stop_id?: string | null;
   driver_lat: number | null;
   driver_lng: number | null;
   accuracy_m: number | null;
@@ -261,6 +283,10 @@ export function renderCocPdf(job: CocJobData, driver: DriverContact | null, pod:
     return lines.length * 5;
   };
 
+  const stops = job.job_kind && job.job_kind !== 'one_way' ? [...(job.stops ?? [])].sort((a, b) => a.seq - b.seq) : [];
+  const multi = stops.length > 0;
+  const roundTrip = job.job_kind === 'round_trip';
+
   // Status line
   const completed = job.status === 'completed';
   doc.setFillColor(completed ? '#ecfdf5' : '#f1f5f9');
@@ -268,11 +294,29 @@ export function renderCocPdf(job: CocJobData, driver: DriverContact | null, pod:
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(10);
   doc.setTextColor(completed ? success : accent);
-  doc.text(completed ? 'DELIVERED — CUSTODY CHAIN COMPLETE' : `STATUS: ${job.status.replace(/_/g, ' ').toUpperCase()}`, M + 4, y);
+  doc.text(completed
+    ? multi ? `${roundTrip ? 'ROUND TRIP' : `ALL ${stops.length} STOPS`} DONE — CUSTODY CHAIN COMPLETE` : 'DELIVERED — CUSTODY CHAIN COMPLETE'
+    : `STATUS: ${job.status.replace(/_/g, ' ').toUpperCase()}`, M + 4, y);
   y += 16;
 
   // Parties
   const col2 = W / 2 + 4;
+  if (multi) {
+    // Multi-stop: the client and the route, stop by stop.
+    label('Client', M, y);
+    label('Route', col2, y);
+    y += 6;
+    const hc = value(`${job.company_name || job.sender_name}`, M, y);
+    const hr = value(`${stops.length} stops${roundTrip ? ' · round trip' : ''}`, col2, y);
+    y += Math.max(hc, hr) + 5;
+    label('Stops', M, y);
+    y += 6;
+    stops.forEach((st) => {
+      const who = st.contact_name || st.company;
+      y += value(`${st.seq}. ${st.kind === 'pickup' ? 'Pickup' : 'Drop-off'} — ${st.address}${st.emirate ? `, ${st.emirate}` : ''}${who ? ` (${who})` : ''}${st.item_note ? ` · ${st.item_note}` : ''}`, M, y, W - 2 * M);
+    });
+    y += 4;
+  } else {
   label('Sender', M, y);
   label('Recipient', col2, y);
   y += 6;
@@ -286,6 +330,7 @@ export function renderCocPdf(job: CocJobData, driver: DriverContact | null, pod:
   const h3 = value(`${job.pickup_location}, ${job.pickup_emirate}`, M, y);
   const h4 = value(`${job.delivery_location}, ${job.delivery_emirate}`, col2, y);
   y += Math.max(h3, h4) + 5;
+  }
 
   label('Item', M, y);
   label('Driver', col2, y);
@@ -311,7 +356,23 @@ export function renderCocPdf(job: CocJobData, driver: DriverContact | null, pod:
     fix?.method === 'ops_override' ? `Confirmed by ${brand} operations` : codeText;
 
   type Event = { label: string; at?: string | null; note: string; fix?: PodFix | null; address?: [number | null | undefined, number | null | undefined] };
-  const events: Event[] = [
+  const stopFix = (st: CocStop) => pod.find((p) => p.step === 'stop_handover' && p.stop_id === st.id) ?? null;
+  const events: Event[] = multi ? [
+    { label: 'Job booked', at: job.created_at, note: `Manifest logged with ${brand} dispatch` },
+    ...stops.map((st): Event => {
+      const fix = stopFix(st);
+      const who = st.contact_name || st.company;
+      const arrived = st.arrived_at ? ` · driver arrived ${ctx.formatTime(st.arrived_at)}` : '';
+      return {
+        label: `Stop ${st.seq} · ${st.kind === 'pickup' ? 'Custody to driver' : 'Custody to recipient'}${who ? ` (${who})` : ''}`,
+        at: st.handed_at,
+        note: `${st.address}${arrived} · ${fix?.method === 'ops_override' || st.method === 'ops_override'
+          ? `Confirmed by ${brand} operations` : 'Verified by one-time code'}`,
+        fix,
+        address: [st.lat, st.lng],
+      };
+    }),
+  ] : [
     { label: 'Job booked', at: job.created_at, note: `Manifest logged with ${brand} dispatch` },
     { label: 'Package ready at origin', at: job.sender_ready_at, note: 'Sender confirmed package prepared' },
     { label: 'Driver arrived at pickup', at: job.driver_arrived_pickup_at, note: job.pickup_location },
@@ -333,6 +394,11 @@ export function renderCocPdf(job: CocJobData, driver: DriverContact | null, pod:
   ];
 
   events.forEach((e, i) => {
+    // Long stop lists continue on a new page (one-way jobs always fit on one).
+    if (multi && y > 250) {
+      doc.addPage();
+      y = 20;
+    }
     const done = Boolean(e.at);
     doc.setFillColor(done ? success : '#cbd5e1');
     doc.circle(M + 2, y - 1.3, 1.8, 'F');
@@ -374,9 +440,13 @@ export function renderCocPdf(job: CocJobData, driver: DriverContact | null, pod:
   });
 
   // Transit time
-  const start = job.driver_pickup_at || job.client_pickup_at;
-  const end = job.client_delivery_at || job.driver_delivery_at;
+  const start = multi ? stops[0].handed_at : job.driver_pickup_at || job.client_pickup_at;
+  const end = multi ? stops[stops.length - 1].handed_at : job.client_delivery_at || job.driver_delivery_at;
   if (tpl.show_transit_time && start && end) {
+    if (multi && y > 255) {
+      doc.addPage();
+      y = 20;
+    }
     const mins = Math.max(0, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 60000));
     y += 4;
     doc.setFillColor('#f8fafc');

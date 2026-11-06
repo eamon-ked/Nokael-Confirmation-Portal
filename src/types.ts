@@ -68,7 +68,38 @@ export interface Job {
   otp_own?: string;
   token_driver_pickup?: string;
   token_driver_delivery?: string;
+  // Multi-stop / round-trip jobs (supabase-multi-stop.sql in nokael-concierge-V2).
+  // get_job_by_token returns the stops in order; codes and contact names only
+  // on the viewer's own stops ("mine"). One-way jobs: job_kind 'one_way', stops null.
+  job_kind?: 'one_way' | 'multi_stop' | 'round_trip';
+  stops?: TrackStop[] | null;
 }
+
+export interface TrackStop {
+  id: string;
+  seq: number;
+  kind: 'pickup' | 'drop';
+  emirate: string | null;
+  address: string;
+  lat: number | null;
+  lng: number | null;
+  building: string | null;
+  company: string | null;
+  item_note: string | null;
+  window_start: string | null;
+  window_end: string | null;
+  arrived_at: string | null;
+  handed_at: string | null;
+  method: 'otp' | 'ops_override' | null;
+  status: 'pending' | 'arrived' | 'handed';
+  mine: boolean;
+  contact_name: string | null;
+  otp: string | null;
+}
+
+/** True for multi-stop and round-trip jobs that carry a stop list. */
+export const isStopJob = (job: Pick<Job, 'job_kind' | 'stops'>): boolean =>
+  !!job.job_kind && job.job_kind !== 'one_way' && !!job.stops?.length;
 
 export type Step = 'client-pickup' | 'driver-pickup' | 'driver-delivery' | 'client-delivery';
 

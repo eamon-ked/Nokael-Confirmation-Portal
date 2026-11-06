@@ -219,7 +219,19 @@ export function JobScreen({ jobId }: { jobId: string }) {
   return (
     <div className="screen" style={{ background: "var(--background)" }}>
       <JobHeader jobRef={job?.ref ?? ""} driverName={driver?.name} onBack={nav.back} />
-      {job && (
+      {job?.multiStop && (
+        <div className="col" style={{ flex: 1, gap: 12, padding: "16px" }}>
+          <div className="card" style={{ padding: 16 }}>
+            <b>Multi-stop job</b>
+            <p style={{ margin: "8px 0 0" }}>
+              This job has several stops, each with its own code. Open it in the Nokael Driver app for Android
+              (version 1.1 or newer). Call dispatch if you can&apos;t.
+            </p>
+          </div>
+          <QuickActionTile emoji="📡" label="DISPATCH" color="var(--slate)" contentColor="#fff" onClick={() => setDialog({ type: "dispatch" })} />
+        </div>
+      )}
+      {job && !job.multiStop && (
         <div className="col" style={{ flex: 1, gap: 12, padding: "16px 16px calc(16px + var(--safe-bottom))" }}>
           <ProgressCard job={job} expanded={local.isProgressExpanded} onToggle={() => setLocal((l) => ({ ...l, isProgressExpanded: !l.isProgressExpanded }))} />
           <DetailsCard job={job} expanded={local.isDetailsExpanded} onToggle={() => setLocal((l) => ({ ...l, isDetailsExpanded: !l.isDetailsExpanded }))} />

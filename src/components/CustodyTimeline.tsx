@@ -1,6 +1,6 @@
 import type { ElementType } from 'react';
 import { CheckCircle2, Circle, MapPin, Package, ShieldCheck, Truck } from 'lucide-react';
-import { Job } from '@/src/types';
+import { Job, isStopJob } from '@/src/types';
 import { formatUAETime } from '@/src/lib/utils';
 
 /**
@@ -21,6 +21,23 @@ interface Milestone {
 }
 
 function buildMilestones(job: Job): Milestone[] {
+  // Multi-stop / round trip: one custody handover per stop, in order.
+  if (isStopJob(job)) {
+    return [
+      { key: 'created', label: 'Manifest Logged', detail: `${job.stops!.length} stops${job.job_kind === 'round_trip' ? ', round trip' : ''}`, timestamp: job.created_at, icon: Package },
+      ...job.stops!.map((s): Milestone => ({
+        key: `stop-${s.seq}`,
+        label: `Stop ${s.seq} — Custody ${s.kind === 'pickup' ? 'Transferred to Courier' : 'Transferred to Recipient'}`,
+        detail: [
+          s.address,
+          s.arrived_at ? `courier arrived ${formatUAETime(s.arrived_at)}` : null,
+          s.handed_at ? (s.method === 'ops_override' ? 'confirmed by operations' : 'verified with a one-time code') : null,
+        ].filter(Boolean).join(' · '),
+        timestamp: s.handed_at,
+        icon: s.kind === 'pickup' ? Truck : ShieldCheck,
+      })),
+    ];
+  }
   return [
     {
       key: 'created',

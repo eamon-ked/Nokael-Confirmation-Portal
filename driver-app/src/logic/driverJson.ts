@@ -56,6 +56,7 @@ export function job(source: unknown): Job {
     otpLocked: dto.otp_locked === true,
     returnReason: str(dto.return_reason),
     cancellationReason: str(dto.cancellation_reason),
+    multiStop: typeof dto.job_kind === "string" && dto.job_kind !== "one_way",
   };
 }
 

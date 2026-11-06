@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Job } from '../types';
+import { Job, isStopJob } from '../types';
 import { useLiveRoute } from '../lib/route';
 import { Loader2, Navigation, Clock } from 'lucide-react';
 import { renderToString } from 'react-dom/server';
@@ -48,6 +48,14 @@ const driverIcon = L.divIcon({
   className: '',
   iconSize: [36, 36],
   iconAnchor: [18, 18],
+});
+
+/** Multi-stop jobs: a numbered pin per stop (grey once handed over). */
+const stopIcon = (n: number, kind: 'pickup' | 'drop', done: boolean) => L.divIcon({
+  html: `<div style="width:24px;height:24px;border-radius:9999px;background:${done ? '#94a3b8' : kind === 'pickup' ? '#0f172a' : '#ef4444'};border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.35);color:#fff;font:700 11px/20px system-ui;text-align:center">${n}</div>`,
+  className: '',
+  iconSize: [24, 24],
+  iconAnchor: [12, 12],
 });
 
 interface DriverMapProps {
@@ -123,8 +131,11 @@ export default function DriverMap({ job, onEta }: DriverMapProps) {
             />
           )}
           
-          {pickup && <Marker position={pickup} icon={pickupIcon} />}
-          {delivery && <Marker position={delivery} icon={deliveryIcon} />}
+          {!isStopJob(job) && pickup && <Marker position={pickup} icon={pickupIcon} />}
+          {!isStopJob(job) && delivery && <Marker position={delivery} icon={deliveryIcon} />}
+          {isStopJob(job) && job.stops!.filter(s => s.lat != null && s.lng != null).map(s => (
+            <Marker key={s.id} position={[s.lat!, s.lng!]} icon={stopIcon(s.seq, s.kind, !!s.handed_at)} />
+          ))}
           {driver && <Marker position={driver} icon={driverIcon} />}
           
           {routeData.length > 0 && (
@@ -150,7 +161,7 @@ export default function DriverMap({ job, onEta }: DriverMapProps) {
               <Clock className="w-4 h-4 text-nokael-accent" />
               <div className="flex flex-col">
                 <span className="text-[8px] font-black uppercase tracking-widest text-white/60">
-                  {collected ? 'Arriving in' : 'At pickup in'}
+                  {live.stop?.seq ? `At stop ${live.stop.seq} in` : collected ? 'Arriving in' : 'At pickup in'}
                 </span>
                 <span className="text-xs font-black tracking-widest leading-none">{etaMinutes} MIN</span>
               </div>

@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '@/src/lib/supabase';
 import { formatClock, formatUAETime, formatWindow, windowFit } from '@/src/lib/utils';
-import { Job } from '@/src/types';
+import { Job, TrackStop, isStopJob } from '@/src/types';
 import { BOOK_URL, LINK_EXPIRY_HOURS, isLinkExpired, redirectToBooking } from '@/src/lib/constants';
 import { useOrgForToken, orgBrand, orgDispatchNumber, orgLogoUrl, orgTimeZone } from '@/src/lib/org';
 import { appUrl, issueAppToken } from '@/src/lib/clientApp';
@@ -120,6 +120,41 @@ function headline(job: Job, stage: number, party: Party): { title: string; sub: 
       };
     }
   }
+}
+
+/** Multi-stop jobs: the stop the driver is on now (first not handed over). */
+const currentStopOf = (job: Job): TrackStop | null => (job.stops ?? []).find(s => !s.handed_at) ?? null;
+
+/** Headline for multi-stop / round-trip jobs, from the current stop. */
+function stopHeadline(job: Job): { title: string; sub: string } {
+  const stops = job.stops ?? [];
+  const total = stops.length;
+  const cur = currentStopOf(job);
+  const round = job.job_kind === 'round_trip';
+  if (job.status === 'completed' || !cur) {
+    const last = stops[total - 1];
+    return {
+      title: round ? 'Round trip complete' : 'All stops done',
+      sub: `Last handover ${formatUAETime(last?.handed_at)}. Your custody certificate is ready.`,
+    };
+  }
+  const where = cur.address;
+  if (cur.arrived_at) {
+    return {
+      title: `Driver at stop ${cur.seq} of ${total}`,
+      sub: `At ${where}. ${cur.mine ? `${cur.kind === 'pickup' ? 'Hand over the item' : 'Receive the item'} with your code.` : cur.kind === 'pickup' ? 'Collection in progress.' : 'Handover in progress.'}`,
+    };
+  }
+  if (stops.some(s => s.handed_at)) {
+    return { title: `On the way to stop ${cur.seq} of ${total}`, sub: `Heading to ${where}${cur.mine ? ' (your stop)' : ''}.` };
+  }
+  if (!job.driver_id) {
+    return { title: 'Booking confirmed', sub: `${total} stops${round ? ', round trip' : ''}. We are assigning a driver to your job.` };
+  }
+  if (!trackingOpen(job, 1)) {
+    return { title: 'Driver assigned', sub: `Live tracking starts ${formatClock(job.tracking_opens_at!)}, an hour before the first pickup.` };
+  }
+  return { title: 'Driver on the way to stop 1', sub: `Heading to ${where}.` };
 }
 
 /** The windows this party cares about: the sender both, the recipient only delivery. */
@@ -324,22 +359,38 @@ export default function TrackPage() {
     );
   }
 
-  const stage = stageOf(job);
+  const multi = isStopJob(job);
+  const stops = job.stops ?? [];
+  const curStop = multi ? currentStopOf(job) : null;
+  const myNextStop = multi ? stops.find(s => s.mine && !s.handed_at) ?? null : null;
+  // Multi-stop: the bar's "collected" stage means any handover happened.
+  const stage = multi
+    ? job.status === 'completed' ? 4 : curStop?.arrived_at && curStop.kind === 'drop' ? 3 : stops.some(s => s.handed_at) ? 2 : job.driver_id ? 1 : 0
+    : stageOf(job);
   const closed = job.status === 'cancelled' || job.status === 'returned';
-  const { title, sub } = headline(job, stage, party);
+  const { title, sub } = multi ? stopHeadline(job) : headline(job, stage, party);
   const dispatchMsg = `Hi ${orgBrand()}, I'm enquiring about job ${job.job_ref}.`;
 
   // The caller's own code is only useful until the handover it guards.
   const otp = job.otp_own?.trim();
-  const otpUsedAt = party === 'sender' ? (job.driver_pickup_at || job.client_pickup_at) : (job.client_delivery_at || job.driver_delivery_at);
+  // (Multi-stop: the server sends the code for the viewer's next stop still to
+  // be handed over, and none once all of theirs are done.)
+  const otpUsedAt = multi ? null : party === 'sender' ? (job.driver_pickup_at || job.client_pickup_at) : (job.client_delivery_at || job.driver_delivery_at);
   const showOtpCard = !!otp && isActive && !otpUsedAt;
 
   // The ETA is to the next stop: pickup before collection, drop-off after.
   const etaAt = etaMinutes != null ? new Date(Date.now() + etaMinutes * 60000) : null;
-  const etaFit = etaAt && (stage >= 2
+  const etaFit = etaAt && (multi
+    ? curStop ? windowFit(etaAt, curStop.window_start, curStop.window_end) : null
+    : stage >= 2
     ? windowFit(etaAt, job.delivery_window_start, job.delivery_window_end)
     : windowFit(etaAt, job.pickup_window_start, job.pickup_window_end));
-  const windows = isActive || stage === 0 ? windowLines(job, party) : [];
+  const windows = isActive || stage === 0
+    ? multi
+      ? stops.filter(s => s.mine && !s.handed_at && formatWindow(s.window_start, s.window_end))
+          .map(s => ({ label: `Stop ${s.seq} window`, value: formatWindow(s.window_start, s.window_end)! }))
+      : windowLines(job, party)
+    : [];
 
   const live = trackingOpen(job, stage);
   const hasDriverPos = live && job.driver_lat != null && job.driver_lng != null;
@@ -380,7 +431,7 @@ export default function TrackPage() {
               {isActive && live && etaMinutes != null && !locationStale && (
                 <p className="mt-3 inline-flex items-center gap-2 rounded-xl bg-nokael-accent-light px-3 py-2 text-sm font-semibold text-nokael-primary">
                   <Clock className="w-4 h-4 text-nokael-accent" />
-                  {stage >= 2 ? 'Arriving' : 'Driver at pickup'} around{' '}
+                  {multi && curStop ? `Driver at stop ${curStop.seq}` : stage >= 2 ? 'Arriving' : 'Driver at pickup'} around{' '}
                   {etaAt!.toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: orgTimeZone() })}
                   <span className="font-normal text-nokael-text-muted">· about {etaMinutes} min</span>
                   {etaFit && (
@@ -409,7 +460,23 @@ export default function TrackPage() {
             {closed && <Undo2 className="w-6 h-6 text-amber-500 shrink-0" />}
           </div>
 
-          {!closed && (
+          {!closed && multi && (
+            <ol className="flex gap-1" aria-label="Stops progress">
+              {stops.map(s => {
+                const done = !!s.handed_at;
+                const current = isActive && s.id === curStop?.id;
+                return (
+                  <li key={s.id} className="flex-1 flex flex-col items-center gap-1.5 text-center min-w-0">
+                    <span className={`h-1.5 w-full rounded-full ${done ? 'bg-nokael-success' : current ? 'bg-nokael-accent' : 'bg-slate-200'} ${current ? 'animate-pulse' : ''}`} />
+                    <span className={`text-[10.5px] leading-tight ${done || current ? 'text-nokael-primary font-semibold' : 'text-nokael-text-muted'}`}>
+                      {s.seq}{s.mine ? ' · you' : ''}
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+          {!closed && !multi && (
             <ol className="grid grid-cols-5 gap-1" aria-label="Delivery progress">
               {STAGES.map((s, i) => {
                 const done = i <= stage;
@@ -442,6 +509,30 @@ export default function TrackPage() {
             </p>
           )}
 
+          {multi ? (
+            <ol className="pt-3 border-t border-nokael-border space-y-2.5" aria-label="Stops">
+              {stops.map(s => (
+                <li key={s.id} className="flex items-start gap-3">
+                  <span className={`w-6 h-6 rounded-full shrink-0 flex items-center justify-center text-[11px] font-bold ${
+                    s.handed_at ? 'bg-nokael-success text-white' : s.id === curStop?.id && isActive ? 'bg-nokael-accent text-white' : 'bg-slate-100 text-nokael-text-muted'}`}>
+                    {s.handed_at ? <CheckCircle2 className="w-3.5 h-3.5" /> : s.seq}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="info-label">
+                      {s.kind === 'pickup' ? 'Pickup' : 'Drop-off'}
+                      {s.mine && <span className="ml-1.5 text-nokael-accent">· your stop</span>}
+                    </p>
+                    <p className="info-value">{s.address}{s.emirate ? `, ${s.emirate}` : ''}</p>
+                    <p className="text-[12px] text-nokael-text-muted">
+                      {[s.mine ? s.contact_name : s.company, s.item_note,
+                        s.handed_at ? `${s.kind === 'pickup' ? 'Collected' : 'Delivered'} ${formatUAETime(s.handed_at)}`
+                          : s.arrived_at ? `Driver arrived ${formatUAETime(s.arrived_at)}` : null].filter(Boolean).join(' · ')}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-nokael-border">
             <div className="pt-3">
               <p className="info-label">From</p>
@@ -454,6 +545,7 @@ export default function TrackPage() {
               <p className="text-[12px] text-nokael-text-muted">{job.recipient_name}</p>
             </div>
           </div>
+          )}
         </section>
 
         {/* Survey + install-the-app (marketing, both parties) */}
@@ -485,10 +577,16 @@ export default function TrackPage() {
           <section className="nokael-card space-y-3">
             <div className="flex items-center gap-2">
               <Key className="w-4 h-4 text-nokael-accent" />
-              <p className="font-semibold text-nokael-primary">Your handover code</p>
+              <p className="font-semibold text-nokael-primary">
+                {multi && myNextStop ? `Your code for stop ${myNextStop.seq}` : 'Your handover code'}
+              </p>
             </div>
             <p className="text-[13px] text-nokael-text-muted">
-              {party === 'sender'
+              {multi && myNextStop
+                ? myNextStop.kind === 'pickup'
+                  ? 'Give this code to the driver only when you hand over the item.'
+                  : 'Give this code to the driver only once you have the item in hand.'
+                : party === 'sender'
                 ? 'Give this code to the driver only when you hand over the package.'
                 : 'Give this code to the driver only once you have the package in hand.'}{' '}
               {orgBrand()} will never ask for it by phone.

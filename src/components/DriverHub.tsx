@@ -173,6 +173,14 @@ export default function DriverHub() {
           return;
         }
 
+        // Multi-stop / round-trip jobs run stop by stop in the Nokael Driver
+        // app (1.1+); this hub only knows one pickup and one drop-off.
+        if (jobData.job_kind && jobData.job_kind !== 'one_way') {
+          setError('This is a multi-stop job. Open it in the Nokael Driver app (version 1.1 or newer) — each stop has its own code there.');
+          setJob(null);
+          return;
+        }
+
         setJob(jobData);
         setError(null);
         await cacheJobData(token, HUB_CACHE_STEP, jobData, '', '');

@@ -13,6 +13,9 @@
 // start at the driver, so driving along the route costs no requests. Nothing
 // is fetched while the tab is hidden.
 //
+// Multi-stop jobs head to their next stop not yet handed over; the refetch
+// rules are the same (a new stop is a new destination).
+//
 // Copy of nokael-concierge-V2/src/lib/route.ts (the dispatcher dashboard) —
 // keep the two in step so the portal and the dashboard show the same ETA.
 //
@@ -51,11 +54,17 @@ export interface RouteResult {
   coords: LatLng[];
 }
 
-export async function getRoute(from: LatLng, to: LatLng): Promise<RouteResult | null> {
+export function getRoute(from: LatLng, to: LatLng): Promise<RouteResult | null> {
+  return getRouteVia([from, to]);
+}
+
+/** One route through every point in order (Mapbox allows up to 25). */
+export async function getRouteVia(points: LatLng[]): Promise<RouteResult | null> {
   const token = import.meta.env.VITE_MAPBOX_TOKEN;
-  if (!token) return null;
+  if (!token || points.length < 2 || points.length > 25) return null;
   try {
-    const url = `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${from[1]},${from[0]};${to[1]},${to[0]}?geometries=geojson&overview=full&access_token=${token}`;
+    const path = points.map(p => `${p[1]},${p[0]}`).join(';');
+    const url = `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${path}?geometries=geojson&overview=full&access_token=${token}`;
     const res = await fetch(url);
     if (!res.ok) return null;
     const route = (await res.json())?.routes?.[0];
@@ -70,17 +79,35 @@ export async function getRoute(from: LatLng, to: LatLng): Promise<RouteResult | 
 // Pickup → drop-off doesn't change, so look it up once per session.
 const staticRoutes = new Map<string, Promise<RouteResult | null>>();
 export function getStaticRoute(from: LatLng, to: LatLng): Promise<RouteResult | null> {
-  const key = `${from.join(',')};${to.join(',')}`;
+  return getStaticRouteVia([from, to]);
+}
+
+/** A multi-stop job's whole route (stop 1 → … → last stop), once per session. */
+export function getStaticRouteVia(points: LatLng[]): Promise<RouteResult | null> {
+  const key = points.map(p => p.join(',')).join(';');
   let hit = staticRoutes.get(key);
   if (!hit) {
-    hit = getRoute(from, to).then(r => { if (!r) staticRoutes.delete(key); return r; });
+    hit = getRouteVia(points).then(r => { if (!r) staticRoutes.delete(key); return r; });
     staticRoutes.set(key, hit);
   }
   return hit;
 }
 
+/** A multi-stop job's stop, as far as routing needs it. */
+export interface RouteStop {
+  seq: number;
+  kind: 'pickup' | 'drop';
+  lat?: number | null;
+  lng?: number | null;
+  address?: string | null;
+  arrived_at?: string | null;
+  handed_at?: string | null;
+}
+
 interface StopFields {
   status?: string | null;
+  job_kind?: string | null;
+  stops?: RouteStop[] | null;
   pickup_lat?: number | null; pickup_lng?: number | null;
   delivery_lat?: number | null; delivery_lng?: number | null;
   client_pickup_at?: string | null; driver_pickup_at?: string | null;
@@ -89,6 +116,9 @@ interface StopFields {
 
 export interface NextStop {
   kind: 'pickup' | 'delivery';
+  /** Multi-stop jobs: which stop (1-based) of how many. */
+  seq?: number;
+  total?: number;
   /** Null when the stop has no map location. */
   target: LatLng | null;
   /** The driver has tapped "arrived" here — no ETA any more. */
@@ -101,6 +131,18 @@ export interface NextStop {
  */
 export function nextStop(job: StopFields): NextStop | null {
   if (['completed', 'cancelled', 'returned'].includes(job.status || '')) return null;
+  // Multi-stop / round trip: the first stop not yet handed over, in order.
+  if (job.job_kind && job.job_kind !== 'one_way' && job.stops?.length) {
+    const s = [...job.stops].sort((a, b) => a.seq - b.seq).find(x => !x.handed_at);
+    if (!s) return null;
+    return {
+      kind: s.kind === 'pickup' ? 'pickup' : 'delivery',
+      target: validCoord(s.lat, s.lng),
+      arrived: !!s.arrived_at,
+      seq: s.seq,
+      total: job.stops.length,
+    };
+  }
   const collected = !!(job.driver_pickup_at || job.client_pickup_at);
   return collected
     ? { kind: 'delivery', target: validCoord(job.delivery_lat, job.delivery_lng), arrived: !!job.driver_arrived_delivery_at }

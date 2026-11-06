@@ -87,6 +87,8 @@ export interface Job {
   otpLocked: boolean;
   returnReason: string | null;
   cancellationReason: string | null;
+  /** Multi-stop / round-trip jobs run stop by stop in the Android app only (1.1+). */
+  multiStop: boolean;
 }
 
 /** Sender before the package is collected, recipient afterwards. */

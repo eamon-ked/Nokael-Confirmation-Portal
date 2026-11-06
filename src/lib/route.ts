@@ -102,6 +102,7 @@ export interface RouteStop {
   address?: string | null;
   arrived_at?: string | null;
   handed_at?: string | null;
+  skipped_at?: string | null;
 }
 
 interface StopFields {
@@ -133,7 +134,7 @@ export function nextStop(job: StopFields): NextStop | null {
   if (['completed', 'cancelled', 'returned'].includes(job.status || '')) return null;
   // Multi-stop / round trip: the first stop not yet handed over, in order.
   if (job.job_kind && job.job_kind !== 'one_way' && job.stops?.length) {
-    const s = [...job.stops].sort((a, b) => a.seq - b.seq).find(x => !x.handed_at);
+    const s = [...job.stops].sort((a, b) => a.seq - b.seq).find(x => !x.handed_at && !x.skipped_at);
     if (!s) return null;
     return {
       kind: s.kind === 'pickup' ? 'pickup' : 'delivery',

@@ -107,6 +107,8 @@ export interface CocStop {
   arrived_at?: string | null;
   handed_at?: string | null;
   method?: 'otp' | 'ops_override' | null;
+  /** Dispatch ended the job before this stop. */
+  skipped_at?: string | null;
 }
 
 export interface DriverContact {
@@ -355,7 +357,7 @@ export function renderCocPdf(job: CocJobData, driver: DriverContact | null, pod:
   const verifiedBy = (fix: PodFix | null, codeText: string) =>
     fix?.method === 'ops_override' ? `Confirmed by ${brand} operations` : codeText;
 
-  type Event = { label: string; at?: string | null; note: string; fix?: PodFix | null; address?: [number | null | undefined, number | null | undefined] };
+  type Event = { label: string; at?: string | null; note: string; fix?: PodFix | null; address?: [number | null | undefined, number | null | undefined]; skipped?: boolean };
   const stopFix = (st: CocStop) => pod.find((p) => p.step === 'stop_handover' && p.stop_id === st.id) ?? null;
   const events: Event[] = multi ? [
     { label: 'Job booked', at: job.created_at, note: `Manifest logged with ${brand} dispatch` },
@@ -363,6 +365,14 @@ export function renderCocPdf(job: CocJobData, driver: DriverContact | null, pod:
       const fix = stopFix(st);
       const who = st.contact_name || st.company;
       const arrived = st.arrived_at ? ` · driver arrived ${ctx.formatTime(st.arrived_at)}` : '';
+      if (st.skipped_at && !st.handed_at) {
+        return {
+          label: `Stop ${st.seq} · Not visited${who ? ` (${who})` : ''}`,
+          at: null,
+          note: `${st.address} · Job ended by ${brand} dispatch before this stop`,
+          skipped: true,
+        };
+      }
       return {
         label: `Stop ${st.seq} · ${st.kind === 'pickup' ? 'Custody to driver' : 'Custody to recipient'}${who ? ` (${who})` : ''}`,
         at: st.handed_at,
@@ -413,7 +423,7 @@ export function renderCocPdf(job: CocJobData, driver: DriverContact | null, pod:
     doc.text(e.label, M + 8, y);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
-    doc.text(done ? ctx.formatTime(e.at!) : 'Not recorded', W - M, y, { align: 'right' });
+    doc.text(done ? ctx.formatTime(e.at!) : e.skipped ? 'Not visited' : 'Not recorded', W - M, y, { align: 'right' });
     doc.setFontSize(8.5);
     doc.setTextColor(muted);
     doc.text(doc.splitTextToSize(e.note, 120)[0], M + 8, y + 4.5);
@@ -441,7 +451,7 @@ export function renderCocPdf(job: CocJobData, driver: DriverContact | null, pod:
 
   // Transit time
   const start = multi ? stops[0].handed_at : job.driver_pickup_at || job.client_pickup_at;
-  const end = multi ? stops[stops.length - 1].handed_at : job.client_delivery_at || job.driver_delivery_at;
+  const end = multi ? [...stops].reverse().find((st) => st.handed_at)?.handed_at : job.client_delivery_at || job.driver_delivery_at;
   if (tpl.show_transit_time && start && end) {
     if (multi && y > 255) {
       doc.addPage();

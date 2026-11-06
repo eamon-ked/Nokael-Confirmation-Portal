@@ -27,9 +27,12 @@ function buildMilestones(job: Job): Milestone[] {
       { key: 'created', label: 'Manifest Logged', detail: `${job.stops!.length} stops${job.job_kind === 'round_trip' ? ', round trip' : ''}`, timestamp: job.created_at, icon: Package },
       ...job.stops!.map((s): Milestone => ({
         key: `stop-${s.seq}`,
-        label: `Stop ${s.seq} — Custody ${s.kind === 'pickup' ? 'Transferred to Courier' : 'Transferred to Recipient'}`,
+        label: s.skipped_at && !s.handed_at
+          ? `Stop ${s.seq} — Not Visited`
+          : `Stop ${s.seq} — Custody ${s.kind === 'pickup' ? 'Transferred to Courier' : 'Transferred to Recipient'}`,
         detail: [
           s.address,
+          s.skipped_at && !s.handed_at ? 'job ended early by operations' : null,
           s.arrived_at ? `courier arrived ${formatUAETime(s.arrived_at)}` : null,
           s.handed_at ? (s.method === 'ops_override' ? 'confirmed by operations' : 'verified with a one-time code') : null,
         ].filter(Boolean).join(' · '),

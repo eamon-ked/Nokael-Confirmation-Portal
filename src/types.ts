@@ -91,7 +91,9 @@ export interface TrackStop {
   arrived_at: string | null;
   handed_at: string | null;
   method: 'otp' | 'ops_override' | null;
-  status: 'pending' | 'arrived' | 'handed';
+  /** Dispatch ended the job before this stop (not visited). */
+  skipped_at?: string | null;
+  status: 'pending' | 'arrived' | 'handed' | 'skipped';
   mine: boolean;
   contact_name: string | null;
   otp: string | null;

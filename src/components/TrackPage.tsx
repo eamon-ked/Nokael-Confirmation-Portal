@@ -122,8 +122,8 @@ function headline(job: Job, stage: number, party: Party): { title: string; sub: 
   }
 }
 
-/** Multi-stop jobs: the stop the driver is on now (first not handed over). */
-const currentStopOf = (job: Job): TrackStop | null => (job.stops ?? []).find(s => !s.handed_at) ?? null;
+/** Multi-stop jobs: the stop the driver is on now (first not done). */
+const currentStopOf = (job: Job): TrackStop | null => (job.stops ?? []).find(s => !s.handed_at && !s.skipped_at) ?? null;
 
 /** Headline for multi-stop / round-trip jobs, from the current stop. */
 function stopHeadline(job: Job): { title: string; sub: string } {
@@ -132,7 +132,13 @@ function stopHeadline(job: Job): { title: string; sub: string } {
   const cur = currentStopOf(job);
   const round = job.job_kind === 'round_trip';
   if (job.status === 'completed' || !cur) {
-    const last = stops[total - 1];
+    const last = [...stops].reverse().find(s => s.handed_at);
+    if (stops.some(s => s.skipped_at && !s.handed_at)) {
+      return {
+        title: `Job completed at stop ${last?.seq ?? 1}`,
+        sub: `Ended early at the client's request; the remaining stops were not needed. Last handover ${formatUAETime(last?.handed_at)}. Your custody certificate is ready.`,
+      };
+    }
     return {
       title: round ? 'Round trip complete' : 'All stops done',
       sub: `Last handover ${formatUAETime(last?.handed_at)}. Your custody certificate is ready.`,
@@ -362,7 +368,7 @@ export default function TrackPage() {
   const multi = isStopJob(job);
   const stops = job.stops ?? [];
   const curStop = multi ? currentStopOf(job) : null;
-  const myNextStop = multi ? stops.find(s => s.mine && !s.handed_at) ?? null : null;
+  const myNextStop = multi ? stops.find(s => s.mine && !s.handed_at && !s.skipped_at) ?? null : null;
   // Multi-stop: the bar's "collected" stage means any handover happened.
   const stage = multi
     ? job.status === 'completed' ? 4 : curStop?.arrived_at && curStop.kind === 'drop' ? 3 : stops.some(s => s.handed_at) ? 2 : job.driver_id ? 1 : 0
@@ -387,7 +393,7 @@ export default function TrackPage() {
     : windowFit(etaAt, job.pickup_window_start, job.pickup_window_end));
   const windows = isActive || stage === 0
     ? multi
-      ? stops.filter(s => s.mine && !s.handed_at && formatWindow(s.window_start, s.window_end))
+      ? stops.filter(s => s.mine && !s.handed_at && !s.skipped_at && formatWindow(s.window_start, s.window_end))
           .map(s => ({ label: `Stop ${s.seq} window`, value: formatWindow(s.window_start, s.window_end)! }))
       : windowLines(job, party)
     : [];
@@ -526,6 +532,7 @@ export default function TrackPage() {
                     <p className="text-[12px] text-nokael-text-muted">
                       {[s.mine ? s.contact_name : s.company, s.item_note,
                         s.handed_at ? `${s.kind === 'pickup' ? 'Collected' : 'Delivered'} ${formatUAETime(s.handed_at)}`
+                          : s.skipped_at ? 'Not visited (job ended early)'
                           : s.arrived_at ? `Driver arrived ${formatUAETime(s.arrived_at)}` : null].filter(Boolean).join(' · ')}
                     </p>
                   </div>

@@ -1,7 +1,7 @@
 {
-  "versionCode": 7,
-  "versionName": "1.0.6",
+  "versionCode": 8,
+  "versionName": "1.1.0",
   "minVersionCode": 4,
   "apkUrl": "https://coc.nokael.com/android/nokael-driver.apk",
-  "notes": "Jobs now show when they start, and the app warns you if you tap I HAVE ARRIVED before the pickup time."
+  "notes": "Multi-stop and round-trip jobs: the app walks you through each stop in order, and you enter the code the person at that stop gives you."
 }

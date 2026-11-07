@@ -109,7 +109,7 @@ function SenderView({ job, step, config, online, handleReadyUpdate, handleReveal
       <div className="text-center space-y-4 pt-4">
         <h1 className="text-3xl font-black text-nokael-primary tracking-tighter uppercase italic">Authenticate Your Courier</h1>
         <p className="text-nokael-text-muted text-sm font-medium px-4">
-          Ask the courier for their 4-digit code and enter it below, or tap to reveal your verification code to read aloud to them.
+          Ask the courier for their 6-digit code and enter it below, or read your pickup code aloud to them.
         </p>
         <WindowChip label="Pickup window" start={job.pickup_window_start} end={job.pickup_window_end} />
       </div>
@@ -120,7 +120,7 @@ function SenderView({ job, step, config, online, handleReadyUpdate, handleReveal
         </div>
         <div className="space-y-6 relative z-10">
           <div className="text-center space-y-4">
-             <p className="info-label text-nokael-accent !mb-0 font-black tracking-[0.2em]">Your Pickup Confirmation Code</p>
+             <p className="info-label text-nokael-accent !mb-0 font-black tracking-[0.2em]">Your pickup code</p>
              <button
                onClick={handleRevealOtp}
                className="w-full relative flex items-center justify-center py-6 sm:py-8 px-4 rounded-3xl border-2 border-dashed border-nokael-accent/30 bg-white shadow-xl shadow-nokael-accent/5 transition-all active:scale-[0.98] group overflow-hidden"
@@ -135,7 +135,7 @@ function SenderView({ job, step, config, online, handleReadyUpdate, handleReveal
                )}
              </button>
              <p className="text-[12px] text-nokael-text-muted font-bold italic">
-               {showMyOtp ? '⚠ Hides in 10s — verbal sharing only' : 'Courier needs this code to log the collection'}
+               {showMyOtp ? 'Read it aloud to the courier at pickup. Never send it by message.' : 'Courier needs this code to log the collection'}
              </p>
           </div>
         </div>
@@ -281,7 +281,7 @@ function CourierView({ job, step, online, handleReadyUpdate, partnerOtp, setPart
                  )}
                </button>
                <p className="text-[12px] text-nokael-text-muted font-bold italic">
-                 {showMyOtp ? '⚠ Hides in 10s — verbal sharing only' : 'The client needs this code to verify your credentials'}
+                 {showMyOtp ? 'Read it aloud to the client. Never send it by message.' : 'The client needs this code to verify your credentials'}
                </p>
             </div>
           </div>
@@ -498,9 +498,9 @@ function RecipientView({ job, step, config, online, handleReadyUpdate, handleRev
               </div>
               {showMyOtp ? (
                 <div className="space-y-4 text-center w-full">
-                   <p className="text-[11px] font-black text-nokael-primary/40 uppercase tracking-widest">Share this with courier upon arrival</p>
+                   <p className="text-[11px] font-black text-nokael-primary/40 uppercase tracking-widest">Your delivery code</p>
                    <div className="text-3xl sm:text-4xl md:text-5xl font-black font-mono tracking-[0.15em] sm:tracking-[0.25em] text-nokael-primary bg-slate-50 p-4 sm:p-6 rounded-2xl border-2 border-slate-100 pl-[0.15em] sm:pl-[0.25em] overflow-hidden break-all">{myOtp}</div>
-                   <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest">Hides in 10s for security</p>
+                   <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest">Read it aloud. Never send it by message.</p>
                 </div>
               ) : (
                 <button 
@@ -512,7 +512,7 @@ function RecipientView({ job, step, config, online, handleReadyUpdate, handleRev
                 </button>
               )}
               <p className="text-[11px] text-nokael-text-muted font-bold text-center leading-relaxed">
-                 The verification code is locked until the courier physically crosses the geofence surrounding the drop-off zone.
+                 This is your delivery code. Give it to the courier only once you have the package in hand.
               </p>
            </div>
 
@@ -986,7 +986,8 @@ export default function ConfirmationPage() {
   const [showQr, setShowQr] = useState(false);
   const [attemptsLeft, setAttemptsLeft] = useState<number | null>(null);
   const [isLocked, setIsLocked] = useState(false);
-  const [showMyOtp, setShowMyOtp] = useState(false);
+  // Shown from the start: clients missed the code behind tap-to-reveal + a 10 s auto-hide.
+  const [showMyOtp, setShowMyOtp] = useState(true);
   const [otpRevealTimer, setOtpRevealTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [online, setOnline] = useState(isOnline());
   const [pendingSync, setPendingSync] = useState(false);
@@ -1074,9 +1075,8 @@ export default function ConfirmationPage() {
 
   function handleRevealOtp() {
     if (otpRevealTimer) clearTimeout(otpRevealTimer);
+    setOtpRevealTimer(null);
     setShowMyOtp(true);
-    const timer = setTimeout(() => setShowMyOtp(false), 10000);
-    setOtpRevealTimer(timer);
   }
 
   const isValidStep = VALID_STEPS.includes(step);
@@ -1123,6 +1123,25 @@ export default function ConfirmationPage() {
       stopAutoSync();
     };
   }, [token, step]);
+
+  // A tab opened hours ago and brought back (switching apps, the back-forward
+  // cache, back online) refreshes quietly at once.
+  useEffect(() => {
+    if (!isValidStep || !token) return;
+    const quiet = () => {
+      if (document.visibilityState !== 'visible' || !isOnline()) return;
+      supabase.rpc('get_job_by_token', { p_token: token }).single()
+        .then(({ data }) => { if (data) setJob(data as Job); }, () => {});
+    };
+    window.addEventListener('pageshow', quiet);
+    window.addEventListener('focus', quiet);
+    document.addEventListener('visibilitychange', quiet);
+    return () => {
+      window.removeEventListener('pageshow', quiet);
+      window.removeEventListener('focus', quiet);
+      document.removeEventListener('visibilitychange', quiet);
+    };
+  }, [token, isValidStep]);
 
   // Quiet 5-second background poll — catches updates from the other party
   useEffect(() => {
@@ -1266,7 +1285,12 @@ export default function ConfirmationPage() {
 
           if (rpcError) throw rpcError;
           if (data?.error === 'locked') { setIsLocked(true); }
-          else if (data?.error === 'invalid_otp') { setError('Incorrect code. Please double-check with the other person.'); setPartnerOtp(''); }
+          else if (data?.error === 'invalid_otp') {
+            setError(data?.code_belongs_to === 'recipient' ? "That's the recipient's delivery code. Ask the sender for their pickup code."
+              : data?.code_belongs_to === 'sender' ? "That's the sender's pickup code. Ask the recipient for their delivery code."
+              : 'Incorrect code. Please double-check with the other person.');
+            setPartnerOtp('');
+          }
           else if (data?.error === 'step_not_applicable') {
             // Safety net for driver_only jobs: shouldn't normally be reachable since
             // DriverOnlyNotice replaces this form, but covers stale cached pages or

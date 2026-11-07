@@ -52,6 +52,7 @@ import { useLinkSeen } from '@/src/lib/linkSeen';
 type Party = 'sender' | 'recipient';
 
 const ACTIVE_POLL_MS = 20000;
+const AT_POINT_POLL_MS = 8000;
 const STALE_LOCATION_MS = 5 * 60 * 1000;
 
 const tel = (p: string) => `tel:${p.startsWith('+') ? p : `+${p.replace(/\D/g, '')}`}`;
@@ -207,7 +208,17 @@ export default function TrackPage() {
   // Let dispatch see the client has opened this link (and when they last looked).
   useLinkSeen(token);
   const [search] = useSearchParams();
-  const party: Party = search.get('for') === 'recipient' ? 'recipient' : 'sender';
+  // Whose link this is comes from the token (link_party); ?for= is only the
+  // fallback while that loads, or before the migration is applied — a
+  // recipient link shared without ?for=recipient used to read like the sender's.
+  const [tokenParty, setTokenParty] = useState<Party | null>(null);
+  useEffect(() => {
+    if (!token) return;
+    supabase.rpc('link_party', { p_token: token }).then(({ data, error: err }) => {
+      if (!err && (data === 'sender' || data === 'recipient')) setTokenParty(data);
+    });
+  }, [token]);
+  const party: Party = tokenParty ?? (search.get('for') === 'recipient' ? 'recipient' : 'sender');
   const staffView = search.get('staff') === '1';
 
   const [job, setJob] = useState<Job | null>(null);
@@ -217,7 +228,8 @@ export default function TrackPage() {
   const [pushBusy, setPushBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expired, setExpired] = useState(false);
-  const [showOtp, setShowOtp] = useState(false);
+  // Shown from the start: clients missed the code behind a tap-to-reveal.
+  const [showOtp, setShowOtp] = useState(true);
   const [copied, setCopied] = useState<string | null>(null);
   const [, setTick] = useState(0);
   const [etaMinutes, setEtaMinutes] = useState<number | null>(null);
@@ -298,24 +310,44 @@ export default function TrackPage() {
 
   const isActive = !!job && !['completed', 'cancelled', 'returned'].includes(job.status);
 
+  // The driver is at a point (or a stop): poll faster so the handover card is current.
+  const driverAtPoint = !!job && (isStopJob(job)
+    ? (job.stops ?? []).some(s => s.arrived_at && !s.handed_at && !s.skipped_at)
+    : (!!job.driver_arrived_pickup_at && !job.driver_pickup_at && !job.client_pickup_at)
+      || (!!job.driver_arrived_delivery_at && job.status !== 'completed'));
+
   // Realtime: the jobs table broadcasts a PII-free "job_updated" ping on
-  // topic job:<id> (see supabase-realtime-broadcast-migration.sql). A slow
-  // poll backs it up in case the socket drops on mobile networks.
+  // topic job:<id> (see supabase-realtime-broadcast-migration.sql). A poll
+  // backs it up in case the socket drops on mobile networks.
   useEffect(() => {
     if (!job?.id || !isActive) return;
     const channel = supabase
       .channel(`job:${job.id}`)
       .on('broadcast', { event: 'job_updated' }, () => fetchJob())
       .subscribe();
-    const poll = setInterval(() => { if (document.visibilityState === 'visible') fetchJob(); }, ACTIVE_POLL_MS);
-    const onVisible = () => { if (document.visibilityState === 'visible') fetchJob(); };
-    document.addEventListener('visibilitychange', onVisible);
+    const poll = setInterval(() => { if (document.visibilityState === 'visible') fetchJob(); }, driverAtPoint ? AT_POINT_POLL_MS : ACTIVE_POLL_MS);
     return () => {
       supabase.removeChannel(channel);
       clearInterval(poll);
-      document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [job?.id, isActive, fetchJob]);
+  }, [job?.id, isActive, fetchJob, driverAtPoint]);
+
+  // A tab opened hours ago and brought back (switching apps, the back-forward
+  // cache, coming back online) reloads at once, whatever the job's state.
+  useEffect(() => {
+    const refresh = () => { if (document.visibilityState === 'visible') fetchJob(); };
+    const onPageShow = (e: PageTransitionEvent) => { if (e.persisted) fetchJob(); else refresh(); };
+    document.addEventListener('visibilitychange', refresh);
+    window.addEventListener('focus', refresh);
+    window.addEventListener('online', refresh);
+    window.addEventListener('pageshow', onPageShow);
+    return () => {
+      document.removeEventListener('visibilitychange', refresh);
+      window.removeEventListener('focus', refresh);
+      window.removeEventListener('online', refresh);
+      window.removeEventListener('pageshow', onPageShow);
+    };
+  }, [fetchJob]);
 
   // Re-render "updated x min ago" labels.
   useEffect(() => {
@@ -580,7 +612,8 @@ export default function TrackPage() {
               <Key className="w-4 h-4 text-nokael-accent" />
               <p className="font-semibold text-nokael-primary">
                 {myCodeHere ? 'Driver is here — give this code at handover'
-                  : multi && myNextStop ? `Your code for stop ${myNextStop.seq}` : 'Your handover code'}
+                  : multi && myNextStop ? `Your code for stop ${myNextStop.seq}`
+                  : party === 'sender' ? 'Your pickup code' : 'Your delivery code'}
               </p>
             </div>
             <p className="text-[13px] text-nokael-text-muted">
@@ -593,6 +626,12 @@ export default function TrackPage() {
                 : 'Give this code to the driver only once you have the package in hand.'}{' '}
               {orgBrand()} will never ask for it by phone.
             </p>
+            {!multi && party === 'recipient' && stage < 2 && (
+              <p className="text-[12px] rounded-lg bg-amber-50 border border-amber-200 text-amber-900 px-3 py-2">
+                This code is for <b>receiving</b> the package at delivery. Handing the package over at pickup? You need
+                the sender's pickup code instead. Ask {orgBrand()} dispatch for the sender's link.
+              </p>
+            )}
             <div className="flex items-center gap-2">
               <div className="flex-1 h-14 rounded-xl bg-slate-50 border border-nokael-border flex items-center justify-center font-mono text-2xl font-bold tracking-[0.3em] whitespace-nowrap text-nokael-primary">
                 {showOtp ? otp : '••••'}

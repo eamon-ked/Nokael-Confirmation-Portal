@@ -7,7 +7,7 @@ import { BackCircleButton, Emoji, ExternalActions, NumberPad, OTP_LENGTH, OtpDig
 import { useNav } from "../nav";
 
 /** A non-"wrong code" reason the last attempt didn't go through. */
-type OtpNotice = "NETWORK" | "JOB_CHANGED" | null;
+type OtpNotice = "NETWORK" | "JOB_CHANGED" | "PARTY_SENDER" | "PARTY_RECIPIENT" | null;
 
 interface OtpEntryState {
   digits: string;
@@ -80,6 +80,11 @@ export function HandoffOtpScreen({ jobId, kind }: { jobId: string; kind: Handoff
         await delay(ERROR_VISIBLE_MS);
         update((s) => ({ ...s, showError: false }));
         break;
+      case "WRONG_PARTY_SENDER":
+      case "WRONG_PARTY_RECIPIENT":
+        // Stays up until the driver types again: they need to ask for the other code.
+        update({ ...EMPTY, showError: true, notice: result === "WRONG_PARTY_RECIPIENT" ? "PARTY_RECIPIENT" : "PARTY_SENDER" });
+        break;
       case "LOCKED":
         update({ ...EMPTY, isLocked: true });
         break;
@@ -136,7 +141,10 @@ export function HandoffOtpScreen({ jobId, kind }: { jobId: string; kind: Handoff
           {/* The request itself failed (not a typo), so say so instead of silently clearing the digits. */}
           {entry.notice && (
             <div className="center" style={{ fontSize: 16, color: "var(--red)", marginBottom: 16 }}>
-              {entry.notice === "NETWORK" ? "⚠️ Couldn't reach the server. Enter the code again." : "⚠️ This job has changed."}
+              {entry.notice === "NETWORK" ? "⚠️ Couldn't reach the server. Enter the code again."
+                : entry.notice === "PARTY_RECIPIENT" ? "⚠️ That's the recipient's delivery code. Ask the sender for their pickup code."
+                : entry.notice === "PARTY_SENDER" ? "⚠️ That's the sender's pickup code. Ask the recipient for their delivery code."
+                : "⚠️ This job has changed."}
             </div>
           )}
           <NumberPad onDigit={onDigit} onBackspace={onBackspace} variant="elevated" keyHeight={compact ? 60 : 76} textSize={compact ? 26 : 30} />

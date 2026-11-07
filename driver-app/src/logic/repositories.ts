@@ -31,7 +31,8 @@ export type RestoreResult =
 export type ActionResult = "SUCCESS" | "STALE" | "FAILED" | "SESSION_ENDED";
 
 /** Result of typing a pickup/drop-off code. LOCKED = five wrong codes; only dispatch can unlock. */
-export type HandoffResult = "SUCCESS" | "WRONG_CODE" | "LOCKED" | "REFRESH" | "ERROR";
+/** WRONG_PARTY_*: the code was the other client's (e.g. the recipient's code given at pickup). */
+export type HandoffResult = "SUCCESS" | "WRONG_CODE" | "WRONG_PARTY_SENDER" | "WRONG_PARTY_RECIPIENT" | "LOCKED" | "REFRESH" | "ERROR";
 
 export interface AuthRepository {
   login(identifier: string, password: string, deviceLabel: string): Promise<LoginResult>;
@@ -244,8 +245,10 @@ export class RemoteJobRepository implements JobRepository {
         return "SUCCESS";
       case "rejected":
         switch (result.error) {
-          case "invalid_otp":
-            return "WRONG_CODE";
+          case "invalid_otp": {
+            const belongs = (result.body as { code_belongs_to?: unknown } | null)?.code_belongs_to;
+            return belongs === "recipient" ? "WRONG_PARTY_RECIPIENT" : belongs === "sender" ? "WRONG_PARTY_SENDER" : "WRONG_CODE";
+          }
           case "locked":
             await this.refresh(); // picks up otp_locked so the screen stays locked after a reopen
             return "LOCKED";

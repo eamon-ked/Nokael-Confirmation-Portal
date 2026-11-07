@@ -1,7 +1,7 @@
 {
-  "versionCode": 8,
-  "versionName": "1.1.0",
+  "versionCode": 9,
+  "versionName": "1.2.0",
   "minVersionCode": 4,
   "apkUrl": "https://coc.nokael.com/android/nokael-driver.apk",
-  "notes": "Multi-stop and round-trip jobs: the app walks you through each stop in order, and you enter the code the person at that stop gives you."
+  "notes": "Clearer wrong-code messages: if a client gives you the other person's code (for example the recipient's code at pickup), the app tells you whose code it is and which one to ask for."
 }

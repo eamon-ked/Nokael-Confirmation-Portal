@@ -22,17 +22,20 @@ import {
   Truck,
   Undo2,
   UserCheck,
+  Hourglass,
+  X,
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '@/src/lib/supabase';
 import { formatClock, formatUAETime, formatWindow, windowFit } from '@/src/lib/utils';
-import { Job, TrackStop, isStopJob } from '@/src/types';
+import { Job, TrackStop, TrackWait, isStopJob } from '@/src/types';
 import { BOOK_URL, LINK_EXPIRY_HOURS, isLinkExpired, redirectToBooking } from '@/src/lib/constants';
 import { useOrgForToken, orgBrand, orgDispatchNumber, orgLogoUrl, orgTimeZone } from '@/src/lib/org';
-import { appUrl, issueAppToken } from '@/src/lib/clientApp';
+import { appUrl, getFeedback, issueAppToken, store } from '@/src/lib/clientApp';
+import { money, openWaitOf, policyLine, waitForLeg, waitForStop, waitView, waitedText } from '@/src/lib/waiting';
 import { downloadCocPdf, DriverContact, PodFix } from '@/src/lib/cocPdf';
 import DriverMap from './DriverMap';
 import CustodyTimeline from './CustodyTimeline';
-import AfterDelivery from './AfterDelivery';
+import AfterDelivery, { ReviewCard } from './AfterDelivery';
 import { enableTrackingPush, trackingPushState, type TrackingPushState } from '@/src/lib/push';
 import { useLinkSeen } from '@/src/lib/linkSeen';
 
@@ -219,6 +222,34 @@ export default function TrackPage() {
   const [, setTick] = useState(0);
   const [etaMinutes, setEtaMinutes] = useState<number | null>(null);
 
+  // Review popup: once the job is delivered (live or on the first visit after),
+  // once per link; ?review=1 (the "Delivered" push) opens it again. Never after
+  // feedback was sent.
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const reviewKey = `nokael_review_popup_${token}`;
+  const reviewForced = search.get('review') === '1';
+  const delivered = job?.status === 'completed';
+  useEffect(() => {
+    if (!delivered || !token) return;
+    if (!reviewForced && store.get(reviewKey)) return;
+    if (store.get(`nokael_feedback_${token}`)) return;
+    let alive = true;
+    const t = setTimeout(async () => {
+      const f = staffView ? null : await getFeedback(token).catch(() => null);
+      if (alive && !f?.rating) setReviewOpen(true);
+    }, 700);
+    return () => { alive = false; clearTimeout(t); };
+  }, [delivered, token, reviewForced, reviewKey, staffView]);
+  const closeReview = useCallback(() => {
+    setReviewOpen(false);
+    store.set(reviewKey, '1');
+    if (reviewForced) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('review');
+      window.history.replaceState(window.history.state, '', url);
+    }
+  }, [reviewKey, reviewForced]);
+
   const fetchJob = useCallback(async () => {
     if (!token) return;
     const { data, error: err } = await supabase.rpc('get_job_by_token', { p_token: token }).maybeSingle();
@@ -402,29 +433,35 @@ export default function TrackPage() {
   const hasDriverPos = live && job.driver_lat != null && job.driver_lng != null;
   const locationStale = job.driver_updated_at ? Date.now() - new Date(job.driver_updated_at).getTime() > STALE_LOCATION_MS : true;
   const vehicle = driver ? [driver.vehicle_make, driver.vehicle_model].filter(Boolean).join(' ') || driver.vehicle_type : null;
+  const myCodeHere = showOtpCard && (multi
+    ? !!(myNextStop && curStop && myNextStop.id === curStop.id && curStop.arrived_at)
+    : party === 'sender' ? !!job.driver_arrived_pickup_at && stage < 2 : stage === 3);
+  const waitingNow = isActive ? openWaitOf(job) : null;
+  const policy = policyLine(job.waiting_policy);
+  const detailWindows = windows.length > 0 && !closed;
 
   return (
     <div className="min-h-[100dvh] pb-[max(2rem,env(safe-area-inset-bottom))]">
       {/* Top bar */}
       <header className="sticky top-0 z-[1100] bg-nokael-bg/90 backdrop-blur border-b border-nokael-border">
         <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <img src="/nokael-logo.jpg" alt="" className="w-7 h-7 rounded-lg object-cover" />
-            <span className="font-extrabold tracking-tight text-nokael-primary">NOKAEL</span>
+          <div className="flex items-center gap-2 min-w-0">
+            <img src={orgLogoUrl() || '/nokael-logo.jpg'} alt="" className="w-7 h-7 rounded-lg object-cover" />
+            <span className="font-extrabold tracking-tight text-nokael-primary truncate">{orgBrand().toUpperCase()}</span>
           </div>
-          <button onClick={share} className="flex items-center gap-1.5 text-[13px] font-semibold text-nokael-accent px-3 py-1.5 rounded-lg hover:bg-nokael-accent-light">
+          <button onClick={share} className="flex items-center gap-1.5 text-[13px] font-semibold text-nokael-accent px-3 min-h-[44px] rounded-lg hover:bg-nokael-accent-light">
             <Share2 className="w-4 h-4" /> {copied === 'link' ? 'Link copied' : 'Share'}
           </button>
         </div>
       </header>
 
       <main className="max-w-2xl mx-auto px-4 pt-5 space-y-4">
-        {/* Status hero */}
-        <section className="nokael-card space-y-5">
+        {/* 1. Status: what is happening now, in one line */}
+        <section className="nokael-card space-y-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="info-label">Job {job.job_ref}</p>
-              <h1 className="text-2xl font-bold text-nokael-primary leading-tight">
+              <h1 className="text-[26px] font-bold text-nokael-primary leading-tight">
                 {closed ? (job.status === 'returned' ? 'Returning to sender' : 'Job cancelled') : title}
               </h1>
               <p className="text-sm text-nokael-text-muted mt-1">
@@ -434,29 +471,6 @@ export default function TrackPage() {
                     : job.cancellation_reason || 'This job has been cancelled. Contact dispatch if this is unexpected.'
                   : sub}
               </p>
-              {isActive && live && etaMinutes != null && !locationStale && (
-                <p className="mt-3 inline-flex items-center gap-2 rounded-xl bg-nokael-accent-light px-3 py-2 text-sm font-semibold text-nokael-primary">
-                  <Clock className="w-4 h-4 text-nokael-accent" />
-                  {multi && curStop ? `Driver at stop ${curStop.seq}` : stage >= 2 ? 'Arriving' : 'Driver at pickup'} around{' '}
-                  {etaAt!.toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: orgTimeZone() })}
-                  <span className="font-normal text-nokael-text-muted">· about {etaMinutes} min</span>
-                  {etaFit && (
-                    <span className={etaFit.late ? 'font-semibold text-amber-600' : 'font-semibold text-nokael-success'}>
-                      · {etaFit.late ? `about ${etaFit.minutes} min late` : 'on time'}
-                    </span>
-                  )}
-                </p>
-              )}
-              {windows.length > 0 && !closed && (
-                <dl className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm">
-                  {windows.map(w => (
-                    <div key={w.label} className="flex gap-1.5">
-                      <dt className="text-nokael-text-muted">{w.label}</dt>
-                      <dd className="font-semibold text-nokael-primary">{w.value}</dd>
-                    </div>
-                  ))}
-                </dl>
-              )}
             </div>
             {isActive && (
               <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-nokael-success bg-nokael-success/10 px-2.5 py-1 rounded-full shrink-0">
@@ -465,6 +479,26 @@ export default function TrackPage() {
             )}
             {closed && <Undo2 className="w-6 h-6 text-amber-500 shrink-0" />}
           </div>
+
+          {waitingNow ? (
+            <WaitTimer wait={waitingNow} />
+          ) : isActive && live && etaMinutes != null && !locationStale && (
+            <div className="rounded-2xl bg-nokael-accent-light px-4 py-3">
+              <p className="flex items-center gap-2 text-[17px] font-bold text-nokael-primary">
+                <Clock className="w-5 h-5 text-nokael-accent shrink-0" />
+                {multi && curStop ? `At stop ${curStop.seq}` : stage >= 2 ? 'Arriving' : 'At pickup'} around{' '}
+                {etaAt!.toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: orgTimeZone() })}
+              </p>
+              <p className="text-[13px] text-nokael-text-muted mt-0.5 pl-7">
+                About {etaMinutes} min
+                {etaFit && (
+                  <span className={etaFit.late ? 'font-semibold text-amber-600' : 'font-semibold text-nokael-success'}>
+                    {' '}· {etaFit.late ? `about ${etaFit.minutes} min late` : 'on time'}
+                  </span>
+                )}
+              </p>
+            </div>
+          )}
 
           {!closed && multi && (
             <ol className="flex gap-1" aria-label="Stops progress">
@@ -503,7 +537,7 @@ export default function TrackPage() {
             <button
               onClick={turnOnPush}
               disabled={pushBusy}
-              className="w-full flex items-center justify-center gap-2 rounded-xl border border-nokael-border px-4 py-2.5 text-sm font-semibold text-nokael-accent hover:bg-nokael-accent-light disabled:opacity-60"
+              className="w-full flex items-center justify-center gap-2 rounded-xl border border-nokael-border px-4 min-h-[44px] text-sm font-semibold text-nokael-accent hover:bg-nokael-accent-light disabled:opacity-60"
             >
               {pushBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bell className="w-4 h-4" />}
               Notify me about this delivery
@@ -514,55 +548,15 @@ export default function TrackPage() {
               <BellRing className="w-4 h-4 text-nokael-success" /> You'll get a notification at each step.
             </p>
           )}
-
-          {multi ? (
-            <ol className="pt-3 border-t border-nokael-border space-y-2.5" aria-label="Stops">
-              {stops.map(s => (
-                <li key={s.id} className="flex items-start gap-3">
-                  <span className={`w-6 h-6 rounded-full shrink-0 flex items-center justify-center text-[11px] font-bold ${
-                    s.handed_at ? 'bg-nokael-success text-white' : s.id === curStop?.id && isActive ? 'bg-nokael-accent text-white' : 'bg-slate-100 text-nokael-text-muted'}`}>
-                    {s.handed_at ? <CheckCircle2 className="w-3.5 h-3.5" /> : s.seq}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="info-label">
-                      {s.kind === 'pickup' ? 'Pickup' : 'Drop-off'}
-                      {s.mine && <span className="ml-1.5 text-nokael-accent">· your stop</span>}
-                    </p>
-                    <p className="info-value">{s.address}{s.emirate ? `, ${s.emirate}` : ''}</p>
-                    <p className="text-[12px] text-nokael-text-muted">
-                      {[s.mine ? s.contact_name : s.company, s.item_note,
-                        s.handed_at ? `${s.kind === 'pickup' ? 'Collected' : 'Delivered'} ${formatUAETime(s.handed_at)}`
-                          : s.skipped_at ? 'Not visited (job ended early)'
-                          : s.arrived_at ? `Driver arrived ${formatUAETime(s.arrived_at)}` : null].filter(Boolean).join(' · ')}
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ol>
-          ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-nokael-border">
-            <div className="pt-3">
-              <p className="info-label">From</p>
-              <p className="info-value">{job.pickup_location}, {job.pickup_emirate}</p>
-              <p className="text-[12px] text-nokael-text-muted">{job.sender_name}</p>
-            </div>
-            <div className="pt-3">
-              <p className="info-label">To</p>
-              <p className="info-value">{job.delivery_location}, {job.delivery_emirate}</p>
-              <p className="text-[12px] text-nokael-text-muted">{job.recipient_name}</p>
-            </div>
-          </div>
-          )}
         </section>
 
-        {/* Survey + install-the-app (marketing, both parties) */}
-        {job.status === 'completed' && token && <AfterDelivery token={token} staff={staffView} party={party} />}
+        {/* Delivered: review (also pops up once), re-book, certificate */}
+        {job.status === 'completed' && token && <AfterDelivery token={token} staff={staffView} party={party} hideReview={reviewOpen} />}
 
-        {/* COC download — the end-of-job deliverable */}
         {job.status === 'completed' && (
           <section className="nokael-card border-nokael-success/30 bg-nokael-success/[0.03] space-y-4">
             <div className="flex items-center gap-3">
-              <span className="w-10 h-10 rounded-xl bg-nokael-success/10 flex items-center justify-center">
+              <span className="w-10 h-10 rounded-xl bg-nokael-success/10 flex items-center justify-center shrink-0">
                 <CheckCircle2 className="w-5 h-5 text-nokael-success" />
               </span>
               <div>
@@ -579,13 +573,14 @@ export default function TrackPage() {
           </section>
         )}
 
-        {/* Handover code */}
+        {/* 2. Your code — highlighted when the driver is at your point */}
         {showOtpCard && (
-          <section className="nokael-card space-y-3">
+          <section className={`nokael-card space-y-3 ${myCodeHere ? 'ring-2 ring-nokael-accent' : ''}`}>
             <div className="flex items-center gap-2">
               <Key className="w-4 h-4 text-nokael-accent" />
               <p className="font-semibold text-nokael-primary">
-                {multi && myNextStop ? `Your code for stop ${myNextStop.seq}` : 'Your handover code'}
+                {myCodeHere ? 'Driver is here — give this code at handover'
+                  : multi && myNextStop ? `Your code for stop ${myNextStop.seq}` : 'Your handover code'}
               </p>
             </div>
             <p className="text-[13px] text-nokael-text-muted">
@@ -617,16 +612,16 @@ export default function TrackPage() {
           </p>
         )}
 
-        {/* Driver + contact */}
-        {!closed && (
+        {/* 3. Driver + contact */}
+        {!closed && job.status !== 'completed' && (
           <section className="nokael-card space-y-4">
             {job.driver_id ? (
               <div className="flex items-center gap-3">
-                <span className="w-11 h-11 rounded-full bg-nokael-primary text-white flex items-center justify-center font-bold">
+                <span className="w-11 h-11 rounded-full bg-nokael-primary text-white flex items-center justify-center font-bold shrink-0">
                   {(driver?.full_name || 'N').trim().charAt(0).toUpperCase()}
                 </span>
                 <div className="min-w-0">
-                  <p className="font-semibold text-nokael-primary truncate">{driver?.full_name || 'Your Nokael driver'}</p>
+                  <p className="font-semibold text-nokael-primary truncate">{driver?.full_name || `Your ${orgBrand()} driver`}</p>
                   <p className="text-[13px] text-nokael-text-muted truncate">
                     {[vehicle, driver?.vehicle_plate].filter(Boolean).join(' · ') || `Verified ${orgBrand()} courier`}
                   </p>
@@ -649,7 +644,7 @@ export default function TrackPage() {
           </section>
         )}
 
-        {/* Live location */}
+        {/* 4. Live location */}
         {isActive && job.driver_id && (
           <section className="space-y-2">
             {!live ? (
@@ -673,7 +668,7 @@ export default function TrackPage() {
                   href={`https://www.google.com/maps/search/?api=1&query=${job.driver_lat},${job.driver_lng}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="font-semibold text-nokael-accent"
+                  className="font-semibold text-nokael-accent min-h-[44px] inline-flex items-center"
                 >
                   Open in Maps
                 </a>
@@ -682,22 +677,148 @@ export default function TrackPage() {
           </section>
         )}
 
-        {/* Chain of custody */}
+        {/* 5. Details: route or stops, windows, item, waiting terms */}
+        <section className="nokael-card space-y-3">
+          <p className="info-label">{multi ? `${stops.length} stops${job.job_kind === 'round_trip' ? ' · round trip' : ''}` : 'Route'}</p>
+          {multi ? (
+            <ol className="space-y-2.5" aria-label="Stops">
+              {stops.map(s => {
+                const w = waitForStop(job, s.id);
+                return (
+                  <li key={s.id} className="flex items-start gap-3">
+                    <span className={`w-6 h-6 rounded-full shrink-0 flex items-center justify-center text-[11px] font-bold ${
+                      s.handed_at ? 'bg-nokael-success text-white' : s.id === curStop?.id && isActive ? 'bg-nokael-accent text-white' : 'bg-slate-100 text-nokael-text-muted'}`}>
+                      {s.handed_at ? <CheckCircle2 className="w-3.5 h-3.5" /> : s.seq}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="info-label">
+                        {s.kind === 'pickup' ? 'Pickup' : 'Drop-off'}
+                        {s.mine && <span className="ml-1.5 text-nokael-accent">· your stop</span>}
+                      </p>
+                      <p className="info-value">{s.address}{s.emirate ? `, ${s.emirate}` : ''}</p>
+                      <p className="text-[12px] text-nokael-text-muted">
+                        {[s.mine ? s.contact_name : s.company, s.item_note,
+                          s.handed_at ? `${s.kind === 'pickup' ? 'Collected' : 'Delivered'} ${formatUAETime(s.handed_at)}`
+                            : s.skipped_at ? 'Not visited (job ended early)'
+                            : s.arrived_at ? `Driver arrived ${formatUAETime(s.arrived_at)}` : null,
+                          formatWindow(s.window_start, s.window_end) && !s.handed_at && !s.skipped_at ? `Window ${formatWindow(s.window_start, s.window_end)}` : null,
+                          w ? waitedText(w) : null].filter(Boolean).join(' · ')}
+                      </p>
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {([
+                ['From', `${job.pickup_location}, ${job.pickup_emirate}`, job.sender_name, waitForLeg(job, 'pickup')],
+                ['To', `${job.delivery_location}, ${job.delivery_emirate}`, job.recipient_name, waitForLeg(job, 'dropoff')],
+              ] as const).map(([label, place, who, w]) => (
+                <div key={label}>
+                  <p className="info-label">{label}</p>
+                  <p className="info-value">{place}</p>
+                  <p className="text-[12px] text-nokael-text-muted">{[who, w ? waitedText(w) : null].filter(Boolean).join(' · ')}</p>
+                </div>
+              ))}
+            </div>
+          )}
+          {detailWindows && !multi && (
+            <dl className="flex flex-wrap gap-x-5 gap-y-1 text-sm pt-1">
+              {windows.map(w => (
+                <div key={w.label} className="flex gap-1.5">
+                  <dt className="text-nokael-text-muted">{w.label}</dt>
+                  <dd className="font-semibold text-nokael-primary">{w.value}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+          <p className="text-[12px] text-nokael-text-muted pt-2 border-t border-nokael-border">
+            {job.item_type} · {job.urgency} · Booked {formatUAETime(job.created_at)}
+            {policy && <><br />Includes {policy}, counted from when the driver arrives.</>}
+          </p>
+        </section>
+
+        {/* 6. Chain of custody */}
         <section className="nokael-card">
           <CustodyTimeline job={job} compact />
         </section>
 
-        {closed && (
+        {(closed || job.status === 'completed') && (
           <section className="grid grid-cols-2 gap-2.5">
-            <ActionButton primary href={tel(orgDispatchNumber())} icon={Headphones} label="Call dispatch" />
+            <ActionButton primary={closed} href={tel(orgDispatchNumber())} icon={Headphones} label="Call dispatch" />
             <ActionButton href={wa(orgDispatchNumber(), dispatchMsg)} icon={MessageSquare} label="Message dispatch" sub="WhatsApp" />
           </section>
         )}
-
-        <p className="text-center text-[11px] text-nokael-text-muted pt-2">
-          Item: {job.item_type} · {job.urgency} · Booked {formatUAETime(job.created_at)}
-        </p>
       </main>
+
+      {reviewOpen && token && <ReviewPopup token={token} staff={staffView} onClose={closeReview} />}
+    </div>
+  );
+}
+
+/** Live waiting clock under the headline once the driver is at a point. */
+function WaitTimer({ wait }: { wait: TrackWait }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 15000);
+    return () => clearInterval(t);
+  }, []);
+  const v = waitView(wait, now);
+  const arrivedMin = Math.max(0, Math.floor((now - new Date(wait.arrived_at).getTime()) / 60000));
+  const rate = `${money(Number(wait.block_aed), wait.currency)} per ${wait.block_min} min`;
+  const charged = v.overFree && v.charge > 0;
+  return (
+    <div className={`rounded-2xl px-4 py-3 ${charged ? 'bg-amber-50 border border-amber-200' : 'bg-nokael-accent-light'}`} role="status">
+      <p className={`flex items-center gap-2 text-[17px] font-bold ${charged ? 'text-amber-800' : 'text-nokael-primary'}`}>
+        <Hourglass className={`w-5 h-5 shrink-0 ${charged ? 'text-amber-600' : 'text-nokael-accent'}`} />
+        {v.early
+          ? `Driver arrived ${arrivedMin} min ago`
+          : charged ? `Waiting ${v.minutes} min · ${money(v.charge, wait.currency)} so far` : `Driver waiting ${v.minutes} min`}
+      </p>
+      <p className="text-[13px] text-nokael-text-muted mt-0.5 pl-7">
+        {v.early
+          ? `Early for the window: waiting time counts from ${formatClock(wait.clock_start)}.`
+          : charged
+            ? `The ${wait.free_min} free minutes are over. Waiting is charged at ${rate}.`
+            : `${v.freeLeft} free min left, then ${rate}.`}
+      </p>
+    </div>
+  );
+}
+
+/** "How did we do?" over the page once the job is delivered (once per link). */
+function ReviewPopup({ token, staff, onClose }: { token: string; staff: boolean; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = overflow; };
+  }, [onClose]);
+  return (
+    <div className="fixed inset-0 z-[1200] flex items-end sm:items-center justify-center bg-black/45 animate-[fadeIn_.2s_ease-out]" onClick={onClose}>
+      <div
+        role="dialog" aria-modal="true" aria-labelledby="review-popup-title"
+        className="w-full sm:max-w-md max-h-[92dvh] overflow-y-auto rounded-t-3xl sm:rounded-3xl bg-nokael-bg p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl animate-[sheetUp_.28s_ease-out]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3 px-1 pb-3">
+          <div className="flex items-center gap-3">
+            <span className="w-11 h-11 rounded-full bg-nokael-success/10 flex items-center justify-center shrink-0">
+              <CheckCircle2 className="w-6 h-6 text-nokael-success" />
+            </span>
+            <div>
+              <p id="review-popup-title" className="text-lg font-bold text-nokael-primary leading-tight">Delivered</p>
+              <p className="text-[13px] text-nokael-text-muted">How did {orgBrand()} do?</p>
+            </div>
+          </div>
+          <button onClick={onClose} aria-label="Close" className="w-11 h-11 -mr-1 rounded-full flex items-center justify-center text-nokael-text-muted hover:bg-slate-100">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <ReviewCard token={token} staff={staff} />
+      </div>
     </div>
   );
 }

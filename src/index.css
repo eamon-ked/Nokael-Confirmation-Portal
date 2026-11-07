@@ -86,3 +86,10 @@
 .timeline-time {
   @apply text-[13px] font-medium tabular-nums text-nokael-text-muted;
 }
+
+/* Review popup on the tracking page */
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sheetUp { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  [class*="animate-[fadeIn"], [class*="animate-[sheetUp"] { animation: none !important; }
+}

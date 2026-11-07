@@ -176,7 +176,7 @@ export function ReviewCard({ token, staff }: { token: string; staff: boolean }) 
  * recipient has just seen the service work, so their card pitches sending
  * with us rather than "another" delivery.
  */
-export default function AfterDelivery({ token, staff, party = 'sender' }: { token: string; staff: boolean; party?: 'sender' | 'recipient' }) {
+export default function AfterDelivery({ token, staff, party = 'sender', hideReview = false }: { token: string; staff: boolean; party?: 'sender' | 'recipient'; hideReview?: boolean }) {
   const [appToken, setAppToken] = useState<string | null>(null);
   const [canPrompt, setCanPrompt] = useState(hasInstallPrompt);
   const [installed, setInstalled] = useState(false);
@@ -214,7 +214,8 @@ export default function AfterDelivery({ token, staff, party = 'sender' }: { toke
 
   return (
     <>
-      <ReviewCard token={token} staff={staff} />
+      {/* While the review popup is open it holds the survey; the card comes back after. */}
+      {!hideReview && <ReviewCard token={token} staff={staff} />}
 
       <a
         href={appToken ? appUrl(appToken) : undefined}

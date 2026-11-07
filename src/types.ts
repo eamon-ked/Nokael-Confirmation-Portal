@@ -73,6 +73,38 @@ export interface Job {
   // on the viewer's own stops ("mine"). One-way jobs: job_kind 'one_way', stops null.
   job_kind?: 'one_way' | 'multi_stop' | 'round_trip';
   stops?: TrackStop[] | null;
+  // Waiting time (supabase-waiting-time.sql in nokael-concierge-V2): one row
+  // per point the driver waited at, and the company's policy.
+  waits?: TrackWait[] | null;
+  waiting_policy?: WaitingPolicy | null;
+}
+
+export interface WaitingPolicy {
+  enabled: boolean;
+  free_min: number;
+  block_min: number;
+  block_aed: number;
+  currency: string;
+}
+
+export interface TrackWait {
+  id: string;
+  leg: 'pickup' | 'dropoff' | 'stop';
+  seq: number;
+  stop_id: string | null;
+  arrived_at: string;
+  /** When the client's clock starts: arrival, or the window start if the driver was early. */
+  clock_start: string;
+  ended_at: string | null;
+  end_reason: string | null;
+  free_min: number;
+  block_min: number;
+  block_aed: number;
+  currency: string;
+  wait_min: number | null;
+  /** Final charge once the wait is over (null while running). */
+  charge_aed: number | null;
+  waived: boolean;
 }
 
 export interface TrackStop {

@@ -90,7 +90,38 @@ export interface CocJobData {
   /** Multi-stop / round trip: every stop in order. One-way jobs leave it out. */
   job_kind?: string | null;
   stops?: CocStop[] | null;
+  /** Waiting at each point (job_waits); only finished waits are printed. */
+  waits?: CocWait[] | null;
 }
+
+/** Driver waiting at a pickup / drop-off / stop, as the certificate prints it. */
+export interface CocWait {
+  leg: 'pickup' | 'dropoff' | 'stop';
+  seq: number;
+  stop_id?: string | null;
+  ended_at?: string | null;
+  wait_min?: number | null;
+  free_min: number;
+  /** Charge (the client link sends the final amount; the dashboard row also has adjusted_charge_aed). */
+  charge_aed?: number | null;
+  adjusted_charge_aed?: number | null;
+  currency?: string | null;
+  waived?: boolean | null;
+}
+
+/** Final charge after any dispatch adjustment, and whether it was waived. */
+const finalCharge = (w: CocWait) => Number(w.adjusted_charge_aed ?? w.charge_aed ?? 0);
+const isWaived = (w: CocWait) => w.waived ?? (w.adjusted_charge_aed === 0 && Number(w.charge_aed ?? 0) > 0);
+
+const cocMoney = (n: number, currency?: string | null) =>
+  `${(currency || 'AED').toUpperCase()} ${Number.isInteger(n) ? n : n.toFixed(2)}`;
+
+/** "Driver waited 22 min (15 free) · AED 25"; '' when nothing to say. */
+const waitNote = (w: CocWait | undefined): string => {
+  if (!w || !w.ended_at || w.wait_min == null) return '';
+  const charge = finalCharge(w);
+  return `Driver waited ${w.wait_min} min (${w.free_min} free)${isWaived(w) ? ' · waiting waived' : charge > 0 ? ` · waiting charge ${cocMoney(charge, w.currency)}` : ''}`;
+};
 
 /** A stop of a multi-stop or round-trip job, as the certificate prints it. */
 export interface CocStop {
@@ -357,8 +388,11 @@ export function renderCocPdf(job: CocJobData, driver: DriverContact | null, pod:
   const verifiedBy = (fix: PodFix | null, codeText: string) =>
     fix?.method === 'ops_override' ? `Confirmed by ${brand} operations` : codeText;
 
-  type Event = { label: string; at?: string | null; note: string; fix?: PodFix | null; address?: [number | null | undefined, number | null | undefined]; skipped?: boolean };
+  type Event = { label: string; at?: string | null; note: string; fix?: PodFix | null; address?: [number | null | undefined, number | null | undefined]; skipped?: boolean; wait?: string };
   const stopFix = (st: CocStop) => pod.find((p) => p.step === 'stop_handover' && p.stop_id === st.id) ?? null;
+  const waits = (job.waits ?? []).filter((w) => w.ended_at);
+  const legWait = (leg: CocWait['leg'], stopId?: string) =>
+    waits.find((w) => (stopId ? w.stop_id === stopId : w.leg === leg && !w.stop_id));
   const events: Event[] = multi ? [
     { label: 'Job booked', at: job.created_at, note: `Manifest logged with ${brand} dispatch` },
     ...stops.map((st): Event => {
@@ -380,12 +414,13 @@ export function renderCocPdf(job: CocJobData, driver: DriverContact | null, pod:
           ? `Confirmed by ${brand} operations` : 'Verified by one-time code'}`,
         fix,
         address: [st.lat, st.lng],
+        wait: waitNote(st.id ? legWait('stop', st.id) : undefined),
       };
     }),
   ] : [
     { label: 'Job booked', at: job.created_at, note: `Manifest logged with ${brand} dispatch` },
     { label: 'Package ready at origin', at: job.sender_ready_at, note: 'Sender confirmed package prepared' },
-    { label: 'Driver arrived at pickup', at: job.driver_arrived_pickup_at, note: job.pickup_location },
+    { label: 'Driver arrived at pickup', at: job.driver_arrived_pickup_at, note: job.pickup_location, wait: waitNote(legWait('pickup')) },
     {
       label: 'Custody transferred to driver',
       at: job.driver_pickup_at || job.client_pickup_at,
@@ -393,7 +428,7 @@ export function renderCocPdf(job: CocJobData, driver: DriverContact | null, pod:
       fix: pickupFix,
       address: [job.pickup_lat, job.pickup_lng],
     },
-    { label: 'Driver arrived at destination', at: job.driver_arrived_delivery_at, note: job.delivery_location },
+    { label: 'Driver arrived at destination', at: job.driver_arrived_delivery_at, note: job.delivery_location, wait: waitNote(legWait('dropoff')) },
     {
       label: 'Custody transferred to recipient',
       at: job.client_delivery_at || job.driver_delivery_at,
@@ -427,6 +462,12 @@ export function renderCocPdf(job: CocJobData, driver: DriverContact | null, pod:
     doc.setFontSize(8.5);
     doc.setTextColor(muted);
     doc.text(doc.splitTextToSize(e.note, 120)[0], M + 8, y + 4.5);
+    if (e.wait) {
+      doc.setTextColor(ink);
+      doc.text(e.wait, M + 8, y + 9);
+      doc.setTextColor(muted);
+      y += 4.5;
+    }
 
     // Where the handover happened, as a tappable map link.
     const f = e.at && tpl.show_gps ? e.fix : null;
@@ -468,6 +509,27 @@ export function renderCocPdf(job: CocJobData, driver: DriverContact | null, pod:
     doc.setFontSize(12);
     doc.setTextColor(ink);
     doc.text(mins >= 60 ? `${Math.floor(mins / 60)} h ${mins % 60} min` : mins < 1 ? '< 1 min' : `${mins} min`, W - M - 5, y + 9, { align: 'right' });
+  }
+
+  // Waiting time: total minutes and charge across every point.
+  const waited = waits.filter((w) => (w.wait_min ?? 0) > 0);
+  if (waited.length) {
+    if (y > 255) {
+      doc.addPage();
+      y = 20;
+    }
+    const mins = waited.reduce((a, w) => a + (w.wait_min ?? 0), 0);
+    const charge = waited.reduce((a, w) => a + finalCharge(w), 0);
+    y += 18;
+    doc.setFillColor('#f8fafc');
+    doc.roundedRect(M, y, W - 2 * M, 14, 2, 2, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(muted);
+    doc.text('WAITING TIME', M + 5, y + 8.8);
+    doc.setFontSize(12);
+    doc.setTextColor(ink);
+    doc.text(`${mins} min${charge > 0 ? ` · ${cocMoney(charge, waited[0].currency)}` : ' · no charge'}`, W - M - 5, y + 9, { align: 'right' });
   }
 
   // Footer: the company's note (bottom-up so longer notes grow upwards), then the reference line.

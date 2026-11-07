@@ -1234,7 +1234,11 @@ export default function ConfirmationPage() {
     setConfirming(true);
     setError(null);
     try {
-      const { error: updateError } = await supabase.rpc('update_job_by_token', { p_token: token, p_updates: { [field]: new Date().toISOString() } });
+      // "Package ready" goes through mark_package_ready: sender link only, server time
+      // (it can start the waiting clock for a driver who arrived early).
+      const { error: updateError } = field === 'sender_ready_at'
+        ? await supabase.rpc('mark_package_ready', { p_token: token })
+        : await supabase.rpc('update_job_by_token', { p_token: token, p_updates: { [field]: new Date().toISOString() } });
       if (updateError) {
         const msg = updateError.message || '';
         if (msg.includes('column') && msg.includes('does not exist')) setError('Database Mismatch: Missing readiness columns. Contact support.');

@@ -24,6 +24,7 @@ import {
   UserCheck,
   Hourglass,
   X,
+  PackageCheck,
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '@/src/lib/supabase';
 import { formatClock, formatUAETime, formatWindow, windowFit } from '@/src/lib/utils';
@@ -355,6 +356,23 @@ export default function TrackPage() {
     return () => clearInterval(t);
   }, []);
 
+  // "My package is ready" (sender, before collection). If the driver is there
+  // early, waiting time counts from this tap instead of the window start.
+  const [readyBusy, setReadyBusy] = useState(false);
+  const [readyError, setReadyError] = useState<string | null>(null);
+  const markReady = async () => {
+    if (!token || readyBusy || staffView) return;
+    setReadyBusy(true);
+    setReadyError(null);
+    const { data, error: err } = await supabase.rpc('mark_package_ready', { p_token: token });
+    setReadyBusy(false);
+    if (err || !(data as { ok?: boolean } | null)?.ok) {
+      setReadyError('We could not save that. Please try again, or tell dispatch.');
+      return;
+    }
+    fetchJob();
+  };
+
   const copy = async (text: string, key: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -513,7 +531,7 @@ export default function TrackPage() {
           </div>
 
           {waitingNow ? (
-            <WaitTimer wait={waitingNow} />
+            <WaitTimer wait={waitingNow} readyHint={waitingNow.leg === 'pickup' && party === 'sender' && !job.sender_ready_at} />
           ) : isActive && live && etaMinutes != null && !locationStale && (
             <div className="rounded-2xl bg-nokael-accent-light px-4 py-3">
               <p className="flex items-center gap-2 text-[17px] font-bold text-nokael-primary">
@@ -649,6 +667,26 @@ export default function TrackPage() {
           <p className="text-[12px] text-nokael-text-muted px-1 flex items-center gap-1.5">
             <CheckCircle2 className="w-3.5 h-3.5 text-nokael-success" /> Your handover code was used {formatUAETime(otpUsedAt)}.
           </p>
+        )}
+
+        {/* Sender: tell the driver the package is ready */}
+        {!multi && party === 'sender' && isActive && stage < 2 && (
+          job.sender_ready_at ? (
+            <p className="text-[13px] text-nokael-text-muted px-1 flex items-center gap-1.5">
+              <PackageCheck className="w-4 h-4 text-nokael-success" /> You said the package is ready {formatUAETime(job.sender_ready_at)}.
+            </p>
+          ) : (
+            <section className="nokael-card space-y-2">
+              <button onClick={markReady} disabled={readyBusy || staffView}
+                className="nokael-button gap-2 w-full disabled:opacity-60">
+                {readyBusy ? <Loader2 className="w-5 h-5 animate-spin" /> : <PackageCheck className="w-5 h-5" />} My package is ready
+              </button>
+              <p className="text-[12px] text-nokael-text-muted text-center">
+                Tap when the package is ready for collection. We let your driver know.
+              </p>
+              {readyError && <p className="text-[12px] text-red-600 text-center">{readyError}</p>}
+            </section>
+          )
         )}
 
         {/* 3. Driver + contact */}
@@ -797,7 +835,7 @@ export default function TrackPage() {
 }
 
 /** Live waiting clock under the headline once the driver is at a point. */
-function WaitTimer({ wait }: { wait: TrackWait }) {
+function WaitTimer({ wait, readyHint }: { wait: TrackWait; readyHint?: boolean }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 15000);
@@ -817,7 +855,7 @@ function WaitTimer({ wait }: { wait: TrackWait }) {
       </p>
       <p className="text-[13px] text-nokael-text-muted mt-0.5 pl-7">
         {v.early
-          ? `Early for the window: waiting time counts from ${formatClock(wait.clock_start)}.`
+          ? `Early for the window: waiting time counts from ${formatClock(wait.clock_start)}${readyHint ? ', or from when you tap "My package is ready"' : ''}.`
           : charged
             ? `The ${wait.free_min} free minutes are over. Waiting is charged at ${rate}.`
             : `${v.freeLeft} free min left, then ${rate}.`}

@@ -39,6 +39,7 @@ import CustodyTimeline from './CustodyTimeline';
 import AfterDelivery, { ReviewCard } from './AfterDelivery';
 import { enableTrackingPush, trackingPushState, type TrackingPushState } from '@/src/lib/push';
 import { useLinkSeen } from '@/src/lib/linkSeen';
+import ShareLocation from './ShareLocation';
 
 /**
  * Client tracking page — /:token/track (sender) or /:token/track?for=recipient.
@@ -465,6 +466,17 @@ export default function TrackPage() {
   const otpUsedAt = multi ? null : party === 'sender' ? (job.driver_pickup_at || job.client_pickup_at) : (job.client_delivery_at || job.driver_delivery_at);
   const showOtpCard = !!otp && isActive && !otpUsedAt;
 
+  // Which stop this person can pin: theirs, until the driver arrives there.
+  const hasPoint = (lat?: number | null, lng?: number | null) => lat != null && lng != null && !(lat === 0 && lng === 0);
+  const shareLeg: { place: string; hasPin: boolean } | null = !isActive || closed ? null
+    : multi
+      ? myNextStop && !myNextStop.arrived_at ? { place: myNextStop.kind === 'pickup' ? 'pickup' : 'drop-off', hasPin: hasPoint(myNextStop.lat, myNextStop.lng) } : null
+      // One-way: only a sender or recipient link (not the general tracking link).
+      : !tokenParty ? null
+      : party === 'sender'
+        ? !job.driver_arrived_pickup_at && !job.driver_pickup_at && !job.client_pickup_at ? { place: 'pickup', hasPin: hasPoint(job.pickup_lat, job.pickup_lng) } : null
+        : !job.driver_arrived_delivery_at && !job.driver_delivery_at && !job.client_delivery_at ? { place: 'drop-off', hasPin: hasPoint(job.delivery_lat, job.delivery_lng) } : null;
+
   // The ETA is to the next stop: pickup before collection, drop-off after.
   const etaAt = etaMinutes != null ? new Date(Date.now() + etaMinutes * 60000) : null;
   const etaFit = etaAt && (multi
@@ -688,6 +700,11 @@ export default function TrackPage() {
               {readyError && <p className="text-[12px] text-red-600 text-center">{readyError}</p>}
             </section>
           )
+        )}
+
+        {/* Exact location from the person at the stop, until the driver gets there */}
+        {shareLeg && token && (
+          <ShareLocation token={token} place={shareLeg.place} hasPin={shareLeg.hasPin} disabled={staffView} onShared={fetchJob} />
         )}
 
         {/* 3. Driver + contact */}

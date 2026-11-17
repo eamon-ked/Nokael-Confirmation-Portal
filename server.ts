@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { createHash } from 'crypto';
 import fs from 'fs';
+import { parseMapUrl, RESOLVABLE_HOST } from './src/lib/mapLink';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -37,9 +38,60 @@ async function logApkDownload(req: express.Request, distPath: string) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Map short links (maps.app.goo.gl/…, maps.apple/p/…) → a point or a place name
+// ---------------------------------------------------------------------------
+// Clients paste links shared from Google Maps / WhatsApp into the address
+// fields (PlaceField). A short link is only a redirect the browser can't follow
+// across origins, so we follow it here: Google / Apple map hosts only, a few hops, and a
+// per-IP limit. Same logic as the dashboard's routes/maps.ts.
+const MAPS_HOST = RESOLVABLE_HOST;
+const resolveHits = new Map<string, number[]>();
+
+async function expandMapsLink(start: string): Promise<string | null> {
+  let current = start;
+  for (let hop = 0; hop < 6; hop++) {
+    const url = new URL(current);
+    if (url.protocol !== 'https:' || !MAPS_HOST.test(url.hostname)) return null;
+    const parsed = parseMapUrl(current);
+    if (parsed && parsed.kind !== 'short') return current;
+    // Not a browser UA: maps.app.goo.gl answers browsers with a JavaScript page instead of the redirect.
+    const res = await fetch(current, {
+      redirect: 'manual',
+      signal: AbortSignal.timeout(6000),
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NokaelLinkResolver/1.0)' },
+    });
+    const location = res.headers.get('location');
+    if (res.status >= 300 && res.status < 400 && location) { current = new URL(location, current).toString(); continue; }
+    return current;
+  }
+  return null;
+}
+
 async function startServer() {
   const app = express();
   const PORT = process.env.PORT || 3000;
+
+  app.post('/api/maps/resolve', express.json({ limit: '4kb' }), async (req, res) => {
+    const ip = (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim() || req.ip || 'unknown';
+    const now = Date.now();
+    const hits = (resolveHits.get(ip) ?? []).filter((t) => now - t < 60_000);
+    if (hits.length >= 20) return res.status(429).json({ error: 'Too many links. Try again in a minute.' });
+    hits.push(now);
+    resolveHits.set(ip, hits);
+    if (resolveHits.size > 5000) resolveHits.clear();
+
+    const raw = typeof req.body?.url === 'string' ? req.body.url.trim() : '';
+    if (!raw || raw.length > 2000) return res.status(400).json({ error: 'Paste a Google Maps link.' });
+    try {
+      const final = await expandMapsLink(raw);
+      const parsed = final ? parseMapUrl(final) : null;
+      if (!parsed || parsed.kind === 'short') return res.status(422).json({ error: 'Couldn’t read a location from that link.' });
+      res.json(parsed);
+    } catch {
+      res.status(502).json({ error: 'Couldn’t reach Google Maps to open that link.' });
+    }
+  });
 
   // Client app manifest: one installable app per client app token, so the
   // home-screen icon opens /app/<token> (the re-booking app) rather than a

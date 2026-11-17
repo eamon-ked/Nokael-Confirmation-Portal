@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { bookDelivery, brand, supportWhatsApp, type BookingInput } from "./api";
+import PlaceField, { type PlaceValue } from "./PlaceField";
 
 const ITEMS: { value: BookingInput["itemType"]; label: string }[] = [
   { value: "document", label: "Documents" },
@@ -24,16 +25,22 @@ export default function BookPanel({ businessId, onClose }: { businessId: string;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [doneRef, setDoneRef] = useState<string | null>(null);
+  const empty: PlaceValue = { text: "", coords: null, region: null };
+  const [pickup, setPickup] = useState<PlaceValue>(empty);
+  const [delivery, setDelivery] = useState<PlaceValue>(empty);
   const set = <K extends keyof BookingInput>(k: K, v: BookingInput[K]) => setForm((f) => ({ ...f, [k]: v }));
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (!form.pickup.trim() || !form.delivery.trim()) { setError("Add both a pickup and a drop-off address."); return; }
+    if (!pickup.text.trim() || !delivery.text.trim()) { setError("Add both a pickup and a drop-off address."); return; }
     if (form.urgency === "scheduled" && !form.date) { setError("Pick a date for the delivery."); return; }
     setBusy(true);
     setError(null);
     try {
-      setDoneRef(await bookDelivery(businessId, form));
+      setDoneRef(await bookDelivery(businessId, {
+        ...form, pickup: pickup.text, delivery: delivery.text,
+        pickupPin: pickup.coords, deliveryPin: delivery.coords, emirate: pickup.region,
+      }));
     } catch (err) {
       const msg = (err as Error).message;
       setError(msg.includes("rate_limited")
@@ -68,8 +75,8 @@ export default function BookPanel({ businessId, onClose }: { businessId: string;
           </div>
         ) : (
           <form className="book-form" onSubmit={submit}>
-            <label>Pickup<input value={form.pickup} onChange={(e) => set("pickup", e.target.value)} placeholder="Building, area, city" maxLength={500} /></label>
-            <label>Drop-off<input value={form.delivery} onChange={(e) => set("delivery", e.target.value)} placeholder="Building, area, city" maxLength={500} /></label>
+            <PlaceField label="Pickup" value={pickup} onChange={setPickup} locate />
+            <PlaceField label="Drop-off" value={delivery} onChange={setDelivery} />
             <label>Recipient <span className="muted">(name and phone, optional)</span><input value={form.recipient} onChange={(e) => set("recipient", e.target.value)} maxLength={200} /></label>
 
             <fieldset className="book-fieldset">

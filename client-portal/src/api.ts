@@ -202,6 +202,10 @@ export type BookingInput = {
   urgency: "immediate" | "today" | "scheduled";
   date: string;
   notes: string;
+  /** Exact points from PlaceField (search, pasted map link, or the phone's GPS). */
+  pickupPin?: [number, number] | null;
+  deliveryPin?: [number, number] | null;
+  emirate?: string | null;
 };
 
 /** Sends a booking request to dispatch; returns its NK-#### reference. */
@@ -215,4 +219,9 @@ export const bookDelivery = (businessId: string, b: BookingInput) =>
     p_preferred_date: b.urgency === "scheduled" && b.date ? b.date : null,
     p_notes: b.notes || null,
     p_recipient: b.recipient || null,
+    p_pickup_lat: b.pickupPin?.[0] ?? null,
+    p_pickup_lng: b.pickupPin?.[1] ?? null,
+    p_delivery_lat: b.deliveryPin?.[0] ?? null,
+    p_delivery_lng: b.deliveryPin?.[1] ?? null,
+    p_emirate: b.emirate || null,
   });

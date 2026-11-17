@@ -231,3 +231,23 @@ select.campaign { border: 1.5px solid var(--line); border-radius: var(--radius-s
   .panel[open] { animation: none; }
   .mark:hover { transform: none; }
 }
+
+/* Address field (PlaceField): search, paste a map link, use my location */
+.place-field { display: grid; gap: 6px; }
+.place-label { font-weight: 700; color: var(--navy); font-size: 0.95rem; }
+.place-box { position: relative; }
+.place-input {
+  width: 100%; min-height: 44px; padding: 10px 12px; border: 1.5px solid var(--line);
+  border-radius: var(--radius-s); background: var(--surface); font-weight: 400;
+}
+.place-list {
+  position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + 4px); margin: 0; padding: 4px;
+  list-style: none; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-s);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, .14); max-height: 260px; overflow-y: auto;
+}
+.place-list li { padding: 10px; border-radius: 4px; cursor: pointer; }
+.place-list li:hover { background: var(--bg); }
+.place-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; font-size: 0.8rem; color: var(--muted); }
+.place-pinned { color: var(--neon-deep); font-weight: 700; }
+.place-locate { border: 0; background: none; padding: 0; color: var(--blue); font-weight: 700; text-decoration: underline; cursor: pointer; }
+.place-note { margin: 0; font-size: 0.8rem; color: var(--orange-text); }

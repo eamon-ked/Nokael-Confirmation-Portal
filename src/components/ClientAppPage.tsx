@@ -1,3 +1,4 @@
+import PlaceField, { type LatLng, type PlaceValue } from './PlaceField';
 import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { AlertCircle, ArrowRight, CheckCircle2, ChevronLeft, Loader2, MapPin, MessageSquare, Package, Plus, Repeat2, Share, SquarePlus } from 'lucide-react';
@@ -248,8 +249,9 @@ function BookForm({ appToken, from, reverse, onDone }: { appToken: string; from?
     ? { loc: from?.pickup_location, lat: from?.pickup_lat, lng: from?.pickup_lng }
     : { loc: from?.delivery_location, lat: from?.delivery_lat, lng: from?.delivery_lng };
 
-  const [pickup, setPickup] = useState(a.loc ?? '');
-  const [delivery, setDelivery] = useState(b.loc ?? '');
+  const pinOf = (lat?: number | null, lng?: number | null): LatLng | null => (lat != null && lng != null ? [lat, lng] : null);
+  const [pickup, setPickup] = useState<PlaceValue>({ text: a.loc ?? '', coords: pinOf(a.lat, a.lng), region: a.em ?? null });
+  const [delivery, setDelivery] = useState<PlaceValue>({ text: b.loc ?? '', coords: pinOf(b.lat, b.lng), region: null });
   const [itemType, setItemType] = useState<RebookInput['itemType']>(
     (ITEM_TYPES.find((t) => t.value === from?.item_type)?.value) ?? 'parcel');
   const [urgency, setUrgency] = useState<RebookInput['urgency']>('today');
@@ -258,25 +260,23 @@ function BookForm({ appToken, from, reverse, onDone }: { appToken: string; from?
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // Coordinates only travel with an address the client didn't edit.
-  const keep = (orig: string | null | undefined, now: string) => !!orig && orig.trim() === now.trim();
-
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (busy) return;
-    if (!pickup.trim() || !delivery.trim()) { setErr('Add both a pickup and a drop-off address.'); return; }
+    if (!pickup.text.trim() || !delivery.text.trim()) { setErr('Add both a pickup and a drop-off address.'); return; }
     if (urgency === 'scheduled' && !date) { setErr('Pick a date for the delivery.'); return; }
     setBusy(true);
     setErr(null);
     try {
       const ref = await rebook(appToken, {
-        pickup, delivery, itemType, urgency, notes,
+        pickup: pickup.text, delivery: delivery.text, itemType, urgency, notes,
         preferredDate: urgency === 'scheduled' ? date : null,
-        pickupEmirate: keep(a.loc, pickup) ? a.em : null,
-        pickupLat: keep(a.loc, pickup) ? a.lat : null,
-        pickupLng: keep(a.loc, pickup) ? a.lng : null,
-        deliveryLat: keep(b.loc, delivery) ? b.lat : null,
-        deliveryLng: keep(b.loc, delivery) ? b.lng : null,
+        // A pin only travels with the place it belongs to (PlaceField drops it on a retyped address).
+        pickupEmirate: pickup.region,
+        pickupLat: pickup.coords?.[0] ?? null,
+        pickupLng: pickup.coords?.[1] ?? null,
+        deliveryLat: delivery.coords?.[0] ?? null,
+        deliveryLng: delivery.coords?.[1] ?? null,
       });
       onDone(ref);
     } catch (e: any) {
@@ -296,14 +296,8 @@ function BookForm({ appToken, from, reverse, onDone }: { appToken: string; from?
       <h1 className="text-xl font-bold text-nokael-primary">{from ? 'Repeat delivery' : 'New delivery'}</h1>
 
       <section className="nokael-card space-y-3">
-        <label className="block space-y-1.5">
-          <span className="info-label flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> Pickup</span>
-          <input className={field} value={pickup} onChange={(e) => setPickup(e.target.value)} placeholder="Building, area, city" maxLength={500} />
-        </label>
-        <label className="block space-y-1.5">
-          <span className="info-label flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> Drop-off</span>
-          <input className={field} value={delivery} onChange={(e) => setDelivery(e.target.value)} placeholder="Building, area, city" maxLength={500} />
-        </label>
+        <PlaceField label="Pickup" value={pickup} onChange={setPickup} locate />
+        <PlaceField label="Drop-off" value={delivery} onChange={setDelivery} />
       </section>
 
       <section className="nokael-card space-y-3">

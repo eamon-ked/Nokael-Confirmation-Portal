@@ -185,6 +185,34 @@ select.campaign { border: 1.5px solid var(--line); border-radius: var(--radius-s
 .remark { background: var(--bg); border-radius: var(--radius-s); padding: 14px 16px; }
 .remark p { margin: 0; }
 .remark-title { font-weight: 800; color: var(--navy); margin-bottom: 4px !important; }
+.cert {
+  display: grid; gap: 12px; padding: 16px; border-radius: var(--radius-m);
+  background: var(--neon-tint); border: 1px solid #bbf7d0;
+}
+.cert p { margin: 0; }
+.cert-title { font-weight: 800; color: var(--navy); }
+.cert .primary { justify-self: start; }
+
+/* ---------- Booking ---------- */
+.overview-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.book-form { display: grid; gap: 16px; }
+.book-form label { display: grid; gap: 6px; font-weight: 700; color: var(--navy); font-size: 0.95rem; }
+.book-form input, .book-form textarea, .book-form select {
+  width: 100%; min-height: 44px; padding: 10px 12px; border: 1.5px solid var(--line);
+  border-radius: var(--radius-s); background: var(--surface); font-weight: 400;
+}
+.book-form textarea { resize: vertical; min-height: 72px; }
+.book-choices { display: flex; flex-wrap: wrap; gap: 8px; }
+.book-choices button {
+  min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1.5px solid var(--line);
+  background: var(--surface); font-weight: 700; cursor: pointer;
+}
+.book-choices button[aria-pressed="true"] { background: var(--navy); border-color: var(--navy); color: #fff; }
+.book-fieldset { border: 0; margin: 0; padding: 0; display: grid; gap: 8px; }
+.book-fieldset legend { padding: 0; margin-bottom: 6px; font-weight: 700; color: var(--navy); font-size: 0.95rem; }
+.book-done { display: grid; gap: 12px; justify-items: start; }
+.book-done h2 { margin: 0; color: var(--navy); }
+
 .live { display: grid; gap: 12px; padding-top: 18px; border-top: 1px solid var(--line); }
 .live p { margin: 0; }
 

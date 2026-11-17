@@ -613,7 +613,8 @@ export default function TrackPage() {
                 <p className="font-semibold text-nokael-primary">Chain of Custody certificate</p>
                 <p className="text-[13px] text-nokael-text-muted">Every handover, time-stamped, code-verified and GPS-located.</p>
                 <p className="text-[12px] text-nokael-text-muted mt-1">
-                  This link closes {LINK_EXPIRY_HOURS} hours after delivery. Download your certificate now. After that, dispatch can send it to you.
+                  This tracking page closes {LINK_EXPIRY_HOURS} hours after delivery. Your certificate stays at{' '}
+                  {token ? <a href={`/${token}/certificate`} className="underline">its own link</a> : 'its own link'}.
                 </p>
               </div>
             </div>

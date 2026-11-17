@@ -5,6 +5,7 @@ import {
   slotText, statusOf, supportWhatsApp, type Campaign, type Job, type Membership,
 } from "./api";
 import JobPanel from "./JobPanel";
+import BookPanel from "./BookPanel";
 import { disablePush, enablePush, getPushState, syncPush, type PushState } from "./push";
 
 const REFRESH_MS = 30_000;
@@ -32,6 +33,7 @@ export default function Dashboard({ email }: { email: string }) {
   const [error, setError] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [booking, setBooking] = useState(false);
   const [, tick] = useState(0);
   const [pushState, setPushState] = useState<PushState | null>(null);
 
@@ -170,9 +172,12 @@ export default function Dashboard({ email }: { email: string }) {
             ) : (
               <h2 className="campaign">All deliveries</h2>
             )}
-            <button className="secondary" onClick={exportPod} disabled={exporting || !jobs?.length}>
-              {exporting ? "Preparing…" : "Download proof of delivery"}
-            </button>
+            <div className="overview-actions">
+              <button className="primary" onClick={() => setBooking(true)} disabled={!businessId}>Book a delivery</button>
+              <button className="secondary" onClick={exportPod} disabled={exporting || !jobs?.length}>
+                {exporting ? "Preparing…" : "Download proof of delivery"}
+              </button>
+            </div>
           </div>
 
           {jobs && (
@@ -251,6 +256,7 @@ export default function Dashboard({ email }: { email: string }) {
       </main>
 
       {openJob && <JobPanel job={openJob} onClose={() => setOpenId(null)} />}
+      {booking && businessId && <BookPanel businessId={businessId} onClose={() => setBooking(false)} />}
     </div>
   );
 }

@@ -187,3 +187,32 @@ export function download(filename: string, text: string) {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+// ---------- Certificate and booking (supabase-share-links-migration.sql) ----------
+
+/** The delivered job's permanent certificate link token, or null before delivery. */
+export const getCertificateToken = (jobId: string) =>
+  rpc<string | null>("client_certificate_token", { p_job: jobId });
+
+export type BookingInput = {
+  pickup: string;
+  delivery: string;
+  recipient: string;
+  itemType: "document" | "parcel" | "spare_part" | "other";
+  urgency: "immediate" | "today" | "scheduled";
+  date: string;
+  notes: string;
+};
+
+/** Sends a booking request to dispatch; returns its NK-#### reference. */
+export const bookDelivery = (businessId: string, b: BookingInput) =>
+  rpc<string>("client_book", {
+    p_business_id: businessId,
+    p_pickup: b.pickup,
+    p_delivery: b.delivery,
+    p_item_type: b.itemType,
+    p_urgency: b.urgency,
+    p_preferred_date: b.urgency === "scheduled" && b.date ? b.date : null,
+    p_notes: b.notes || null,
+    p_recipient: b.recipient || null,
+  });

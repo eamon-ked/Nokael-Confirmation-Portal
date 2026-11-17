@@ -1,12 +1,33 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { COC_URL } from "./supabase";
-import { ago, full, slotText, statusOf, verifiedLabel, type Job } from "./api";
+import { ago, full, getCertificateToken, slotText, statusOf, verifiedLabel, type Job } from "./api";
 
 type Step = { label: string; at: string | null; note?: string | null };
 
 export default function JobPanel({ job, onClose }: { job: Job; onClose: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => { ref.current?.showModal(); }, []);
+
+  const [certBusy, setCertBusy] = useState(false);
+  const [certError, setCertError] = useState<string | null>(null);
+
+  // Opens the window first (inside the click) so popup blockers allow it.
+  async function openCertificate() {
+    setCertBusy(true);
+    setCertError(null);
+    const win = window.open("", "_blank");
+    try {
+      const token = await getCertificateToken(job.job_id);
+      if (!token) throw new Error("The certificate isn't ready yet.");
+      if (win) win.location.href = `${COC_URL}/${token}/certificate`;
+      else window.location.href = `${COC_URL}/${token}/certificate`;
+    } catch (e) {
+      win?.close();
+      setCertError((e as Error).message);
+    } finally {
+      setCertBusy(false);
+    }
+  }
 
   const s = statusOf(job);
   const inTransit = s.tone === "moving";
@@ -44,6 +65,19 @@ export default function JobPanel({ job, onClose }: { job: Job; onClose: () => vo
             </li>
           ))}
         </ol>
+
+        {job.status === "completed" && (
+          <div className="cert">
+            <div>
+              <p className="cert-title">Chain of Custody certificate</p>
+              <p className="muted">Every handover, time-stamped and verified.</p>
+            </div>
+            <button className="primary" onClick={openCertificate} disabled={certBusy}>
+              {certBusy ? "Opening…" : "Open certificate"}
+            </button>
+            {certError && <p className="error">{certError}</p>}
+          </div>
+        )}
 
         {job.remark && (
           <div className="remark">

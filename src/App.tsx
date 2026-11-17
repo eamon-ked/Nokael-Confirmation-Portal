@@ -4,6 +4,7 @@ import DriverHub from './components/DriverHub';
 import DriverStatusPage from './components/DriverStatusPage';
 import TrackPage from './components/TrackPage';
 import ClientAppPage from './components/ClientAppPage';
+import CertificatePage from './components/CertificatePage';
 
 export default function App() {
   return (
@@ -21,6 +22,9 @@ export default function App() {
 
           {/* Client app — installable re-booking PWA (long-lived client_app_tokens) */}
           <Route path="/app/:appToken" element={<ClientAppPage />} />
+
+          {/* Delivered job's certificate — never expires (get_certificate) */}
+          <Route path="/:token/certificate" element={<CertificatePage />} />
 
           {/* Main Confirmation Route */}
           <Route path="/:token/:step" element={<ConfirmationPage />} />
